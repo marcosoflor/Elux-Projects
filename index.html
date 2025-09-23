@@ -1,0 +1,1979 @@
+<!DOCTYPE html>
+<html lang='pt-BR'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Mapa Visual de Ativos da Fábrica</title>
+    <!-- Adicionada biblioteca de gráficos ApexCharts -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <style>
+        /* --- Reset Básico e Estilos Globais --- */
+        :root {
+            --color-healthy: #22c55e;
+            --color-attention: #facc15;
+            --color-critical: #ef4444;
+            --color-obsolete: #9333ea;
+            --color-primary: #4f46e5;
+            --color-background: #f3f4f6;
+            --color-surface: #ffffff;
+            --text-primary: #111827;
+            --text-secondary: #4b5563;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: var(--color-background);
+            color: var(--text-primary);
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        /* --- Scrollbar --- */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        /* --- Layout Principal --- */
+        .main-container {
+            padding: 1rem;
+        }
+        @media (min-width: 640px) {
+            .main-container { padding: 1.5rem; }
+        }
+        @media (min-width: 1024px) {
+            .main-container { padding: 2rem; }
+        }
+
+        header {
+            margin-bottom: 1.5rem;
+        }
+
+        header h1 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        header p {
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        /* --- Painel de Filtros e KPIs --- */
+        .filters-kpis-panel {
+            background-color: var(--color-surface);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(255, 255, 255, 0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            align-items: center;
+        }
+        @media (min-width: 768px) {
+            .filters-kpis-panel { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (min-width: 1024px) {
+            .filters-kpis-panel { grid-template-columns: repeat(5, 1fr); }
+        }
+        
+        .filter-group label, .comparison-controls label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .filter-group select {
+            margin-top: 0.25rem;
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+        
+        .kpi-card {
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+        .kpi-card h3 {
+            font-size: 0.875rem;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .kpi-card .value {
+            margin-top: 0.25rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        .kpi-card .sub-value {
+            font-size: 0.875rem;
+        }
+
+        /* --- Cores dos KPIs --- */
+        .kpi-card.total { background-color: #eff6ff; }
+        .kpi-card.total h3 { color: #1e40af; }
+        .kpi-card.total .value { color: #1e3a8a; }
+        .kpi-card.total .sub-value { color: #1d4ed8; }
+
+        .kpi-card.depreciated { background-color: #fefce8; }
+        .kpi-card.depreciated h3 { color: #854d0e; }
+        .kpi-card.depreciated .value { color: #713f12; }
+        .kpi-card.depreciated .sub-value { color: #a16207; }
+
+        .kpi-card.remaining { background-color: #f0fdf4; }
+        .kpi-card.remaining h3 { color: #166534; }
+        .kpi-card.remaining .value { color: #15803d; }
+        .kpi-card.remaining .sub-value { color: #16a34a; }
+        
+        /* --- Controles de Comparação --- */
+        .comparison-controls { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+        .comparison-controls > div { display: flex; align-items: center; gap: 0.5rem; }
+        .comparison-controls button {
+            width: 100%;
+            background-color: var(--color-primary);
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            box-shadow: 0 1px 2px 0 rgb(255, 255, 255);
+            transition: background-color 0.2s;
+        }
+        .comparison-controls button:hover { background-color: #4338ca; }
+        .comparison-controls button:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .hidden { display: none !important; }
+
+        /* --- Toggle Switch --- */
+        .toggle-switch { position: relative; display: inline-block; width: 40px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
+        .toggle-slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .toggle-slider { background-color: var(--color-primary); }
+        input:checked + .toggle-slider:before { transform: translateX(16px); }
+
+        /* --- Legenda e Título do Mapa --- */
+        .map-header {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+        @media (min-width: 640px) {
+            .map-header { flex-direction: row; align-items: center; }
+        }
+
+        .map-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+        }
+        @media (min-width: 640px) {
+            .map-header h2 { margin-bottom: 0; }
+        }
+        
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 1rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        .legend-item { display: flex; align-items: center; }
+        .legend-color { width: 1rem; height: 1rem; border-radius: 0.125rem; margin-right: 0.5rem; }
+        .legend-icon-wrapper { position: relative; width: 1rem; height: 1rem; margin-right: 0.5rem; }
+        .legend-icon-wrapper .legend-color { background-color: #d1d5db; }
+        .legend-icon-wrapper .legend-star { position: absolute; top: -0.4rem; right: -0.4rem; font-size: 1.25rem; color: #facc15; }
+
+        /* --- Mapa da Fábrica --- */
+        #factory-map-container {
+            background-color: var(--color-surface);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+        }
+        #factory-map-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .area-wrapper {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            background-color: rgba(249, 250, 251, 0.5);
+            min-height: 150px;
+        }
+        .area-wrapper h3 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+        }
+
+        .assets-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .asset-block {
+            width: 2rem;
+            height: 2rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.2s, opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .asset-block:hover { transform: scale(1.25); z-index: 10; }
+
+        /* Classes de Status (adicionadas via JS) */
+        .status-healthy { background-color: var(--color-healthy); }
+        .status-attention { background-color: var(--color-attention); }
+        .status-critical { background-color: var(--color-critical); }
+        .status-obsolete { background-color: var(--color-obsolete); }
+        .status-unknown { background-color: #9ca3af; }
+
+        .asset-block .asset-number {
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            user-select: none;
+        }
+
+        .asset-block .asset-star {
+            position: absolute;
+            top: -0.4rem;
+            right: -0.4rem;
+            font-size: 1.25rem;
+            color: #facc15;
+            text-shadow: 0 0 2px black;
+        }
+        
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 0.5rem;
+            background-color: #1f2937;
+            color: white;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.25rem;
+            white-space: nowrap;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 50;
+        }
+        .asset-block:hover .tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Comparação */
+        .asset-block.selected-for-comparison {
+            box-shadow: 0 0 0 3px var(--color-primary);
+        }
+        .asset-block.disabled-for-comparison {
+            opacity: 0.25;
+            cursor: not-allowed;
+        }
+        .asset-block.disabled-for-comparison:hover {
+            transform: none;
+        }
+
+        .comparison-check {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 1rem;
+            height: 1rem;
+            background-color: var(--color-primary);
+            color: white;
+            border-radius: 50%;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- Modals (Detalhes e Comparação) --- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            opacity: 0;
+            transition: opacity 0.3s;
+            visibility: hidden;
+        }
+        .modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-box {
+            background-color: var(--color-surface);
+            border-radius: 0.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+            width: 100%;
+            transform: scale(0.95);
+            transition: transform 0.3s;
+        }
+        .modal-overlay.visible .modal-box {
+            transform: scale(1);
+        }
+        
+        .modal-box.details { max-width: 32rem; }
+        .modal-box.comparison { max-width: 80rem; }
+
+        .modal-content-wrapper {
+            padding: 1.5rem;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+        .modal-header h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .modal-header button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #9ca3af;
+        }
+        .modal-header button:hover { color: var(--text-primary); }
+        .modal-header svg { width: 1.5rem; height: 1.5rem; }
+
+        .modal-body {
+            font-size: 0.875rem;
+            color: #374151;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .modal-body .detail-section {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e5e7eb;
+        }
+        .modal-body .detail-section h4 {
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+        .modal-body .detail-box {
+            background-color: #f9fafb;
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+        }
+        .modal-body .detail-box p { margin: 0.25rem 0; }
+        .modal-body .grid-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 1rem;
+        }
+        .modal-body .grid-details p { margin: 0; }
+        .modal-body .grid-details .text-right { text-align: right; }
+        
+        /* --- Estilos para Gráficos --- */
+        .performance-chart-container {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e5e7eb;
+        }
+        .performance-chart-container h4 {
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+        .comparison-sparkline {
+            min-height: 50px; /* Garante espaço para o gráfico renderizar */
+        }
+        
+        /* Tabela de Comparação */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+        .comparison-table th, .comparison-table td {
+            padding: 0.5rem;
+            border: 1px solid #e5e7eb;
+            text-align: left;
+            vertical-align: middle;
+        }
+        .comparison-table thead th {
+            background-color: #f9fafb;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .comparison-table td { text-align: center; }
+        .comparison-table td:first-child { text-align: left; font-weight: 500; }
+        
+
+    </style>
+</head>
+<body>
+
+    <div class='main-container'>
+        
+        <header>
+            <h1>Mapa Visual de Ativos da Fábrica</h1>
+            <p>Visão geral do ciclo de vida e status dos ativos por área.</p>
+        </header>
+
+        <div class='filters-kpis-panel'>
+            <div class='filter-group'>
+                <label for='category-filter'>Filtrar por Categoria:</label>
+                <select id='category-filter'>
+                    <option value='all'>Todas as Categorias</option>
+                </select>
+            </div>
+            <div class='kpi-card total'>
+                <h3>Valor Total dos Ativos</h3>
+                <p id='total-value' class='value'>R$ 0,00</p>
+                <p id='total-value-sek' class='sub-value'>SEK 0,00</p>
+            </div>
+            <div class='kpi-card depreciated'>
+                <h3>Valor Depreciado</h3>
+                <p id='depreciated-value' class='value'>R$ 0,00</p>
+                <p id='depreciated-value-sek' class='sub-value'>SEK 0,00</p>
+            </div>
+            <div class='kpi-card remaining'>
+                <h3>Saldo para Depreciar</h3>
+                <p id='remaining-value' class='value'>R$ 0,00</p>
+                <p id='remaining-value-sek' class='sub-value'>SEK 0,00</p>
+            </div>
+            <div class='comparison-controls'>
+                <div>
+                    <label for='comparison-toggle'>Modo Comparação</label>
+                    <label class="toggle-switch">
+                        <input type='checkbox' id='comparison-toggle'>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <button id='compare-btn' class='hidden' disabled>
+                    Comparar (0)
+                </button>
+            </div>
+        </div>
+
+        <div class='map-header'>
+            <h2>Mapa da Fábrica (<span id='asset-count'>0</span> Ativos)</h2>
+            <div class='legend'>
+                <div class='legend-item'><span class='legend-color' style='background-color: var(--color-healthy);'></span>Saudável (&le; 80%)</div>
+                <div class='legend-item'><span class='legend-color' style='background-color: var(--color-attention);'></span>Atenção (80-100%)</div>
+                <div class='legend-item'><span class='legend-color' style='background-color: var(--color-critical);'></span>Crítico (100-120%)</div>
+                <div class='legend-item'><span class='legend-color' style='background-color: var(--color-obsolete);'></span>Obsoleto (> 120%)</div>
+                <div class='legend-item'>
+                    <div class='legend-icon-wrapper'>
+                        <div class='legend-color'></div>
+                        <span class='legend-star'>&#9733;</span>
+                    </div>
+                    <span>Alterações</span>
+                </div>
+            </div>
+        </div>
+
+        <div id='factory-map-container'>
+            <!-- Asset areas will be injected here by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Asset Detail Modal -->
+    <div id='asset-modal' class='modal-overlay'>
+        <div class='modal-box details'>
+            <div class='modal-content-wrapper'>
+                <div class='modal-header'>
+                    <h2 id='modal-title'>Detalhes do Ativo</h2>
+                    <button id='modal-close-btn'>
+                        <svg fill='none' stroke='currentColor' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12'></path></svg>
+                    </button>
+                </div>
+                <div id='modal-content' class='modal-body'>
+                    <!-- Details will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Comparison Modal -->
+    <div id='comparison-modal' class='modal-overlay'>
+        <div class='modal-box comparison'>
+            <div class='modal-content-wrapper'>
+                <div class='modal-header'>
+                    <h2>Comparação de Ativos</h2>
+                    <button id='comparison-modal-close-btn'>
+                        <svg fill='none' stroke='currentColor' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12'></path></svg>
+                    </button>
+                </div>
+                <div id='comparison-modal-content' class='modal-body'>
+                    <!-- Comparison table will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // Data provided by the user, parsed into a structured format.
+        const assetData = [
+          {ativo:'INJETORA HIDR. HAITIAN 750T - Nº 01',category:'Plastic',area:'INJETORAS DE MÉDIO PORTE',inicioDepreciacao:'2018-01-31',vidaUtil:10,tipo:'Interno',valorTotal:991375.99,valorDepreciado:-774402.53,saldoParaDepreciar:216973.46},
+          {ativo:'INJETORA HIDR. HAITIAN 750T - Nº 02',category:'Plastic',area:'INJETORAS DE MÉDIO PORTE',inicioDepreciacao:'2020-09-30',vidaUtil:10,tipo:'Interno',valorTotal:1183010.16,valorDepreciado:-1183010.16,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 600T - Nº 03',category:'Plastic',area:'INJETORAS DE MÉDIO PORTE',inicioDepreciacao:'2008-09-01',vidaUtil:10,tipo:'Interno',valorTotal:404260.24,valorDepreciado:-404260.24,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 600T - Nº 04',category:'Plastic',area:'INJETORAS DE MÉDIO PORTE',inicioDepreciacao:'2008-09-01',vidaUtil:10,tipo:'Interno',valorTotal:401539.34,valorDepreciado:-401539.34,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 600T - Nº 05',category:'Plastic',area:'INJETORAS DE MÉDIO PORTE',inicioDepreciacao:'2013-08-31',vidaUtil:10,tipo:'Interno',valorTotal:427685.16,valorDepreciado:-427685.16,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 600T - Nº 06',category:'Plastic',area:'INJETORAS DE MÉDIO PORTE',inicioDepreciacao:'2013-08-31',vidaUtil:10,tipo:'Interno',valorTotal:430876.88,valorDepreciado:-430876.88,saldoParaDepreciar:0},
+          {ativo:'INJETORA ELETR. ZHAFIR HAITIAN 550T - Nº 07',category:'Plastic',area:'INJETORAS DE MÉDIO PORTE',inicioDepreciacao:'2014-11-30',vidaUtil:10,tipo:'Interno',valorTotal:839205.5,valorDepreciado:-750114.17,saldoParaDepreciar:89091.33},
+          {ativo:'INJETORA HIDR. HAITIAN 750T - N° 08',category:'Plastic',area:'INJETORAS DE MÉDIO PORTE',inicioDepreciacao:'2025-08-31',vidaUtil:10,tipo:'Interno',valorTotal:2118184.29,valorDepreciado:0,saldoParaDepreciar:2118184.29},
+          {ativo:'INJETORA HIDR. HAITIAN 600T - Nº 09',category:'Plastic',area:'INJETORAS DE MÉDIO PORTE',inicioDepreciacao:'2016-07-31',vidaUtil:10,tipo:'Interno',valorTotal:894579.08,valorDepreciado:-700122.78,saldoParaDepreciar:194456.3},
+          {ativo:'INJETORA HIDR. HAITIAN 600T - Nº 10',category:'Plastic',area:'INJETORAS DE MÉDIO PORTE',inicioDepreciacao:'2016-06-30',vidaUtil:10,tipo:'Interno',valorTotal:894303.63,valorDepreciado:-706269.81,saldoParaDepreciar:188033.82},
+          {ativo:'INJETORA ELETR. ZHAFIR 550T - Nº 11',category:'Plastic',area:'INJETORAS DE MÉDIO PORTE',inicioDepreciacao:'2014-11-30',vidaUtil:10,tipo:'Interno',valorTotal:892720.86,valorDepreciado:-771990.65,saldoParaDepreciar:120730.21},
+          {ativo:'INJETORA ELETR. ZHAFIR 550T - Nº 12',category:'Plastic',area:'INJETORAS DE MÉDIO PORTE',inicioDepreciacao:'2014-11-30',vidaUtil:10,tipo:'Interno',valorTotal:892435.49,valorDepreciado:-758571.86,saldoParaDepreciar:133863.63},
+          {ativo:'INJETORA ELETR. ZHAFIR 550T - Nº 13',category:'Plastic',area:'INJETORAS DE MÉDIO PORTE',inicioDepreciacao:'2014-11-30',vidaUtil:10,tipo:'Interno',valorTotal:893789.7,valorDepreciado:-798257.95,saldoParaDepreciar:95531.75},
+          {ativo:'INJETORA HIDR. SEMERARO 1100T (SANDRETO) - Nº 14',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'1997-06-01',vidaUtil:10,tipo:'Interno',valorTotal:950878.87,valorDepreciado:-950878.87,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. SEMERARO 1300T (SANDRETO) - Nº 15',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'2002-12-01',vidaUtil:10,tipo:'Interno',valorTotal:2109523.8,valorDepreciado:-2109523.8,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 1800T - Nº 16',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'2007-07-01',vidaUtil:10,tipo:'Interno',valorTotal:1093122.72,valorDepreciado:-1093122.72,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 1800T - Nº 17',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'2007-07-01',vidaUtil:10,tipo:'Interno',valorTotal:1167922.26,valorDepreciado:-1167922.26,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 1800T - Nº 18',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'2007-07-01',vidaUtil:10,tipo:'Interno',valorTotal:1169152.08,valorDepreciado:-1169152.08,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 1800T - Nº 19',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'2007-07-01',vidaUtil:10,tipo:'Interno',valorTotal:1215449.1,valorDepreciado:-1215449.1,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 1800T - Nº 20',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'2008-09-01',vidaUtil:10,tipo:'Interno',valorTotal:954500.53,valorDepreciado:-954500.53,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 1800T - Nº 21',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'2008-09-01',vidaUtil:10,tipo:'Interno',valorTotal:1001887.96,valorDepreciado:-1001887.96,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 1850T - N° 22',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'2024-01-31',vidaUtil:10,tipo:'Interno',valorTotal:3512060.86,valorDepreciado:-384131.66,saldoParaDepreciar:3127929.2},
+          {ativo:'INJETORA HIDR. HAITIAN 1850T - Nº 23',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'2010-05-01',vidaUtil:10,tipo:'Interno',valorTotal:1342339.54,valorDepreciado:-1342339.54,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 1800T - Nº 24',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'2010-05-01',vidaUtil:10,tipo:'Interno',valorTotal:1090992.12,valorDepreciado:-1090992.12,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 1850T - Nº 25',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'2010-08-01',vidaUtil:10,tipo:'Interno',valorTotal:1157906.55,valorDepreciado:-1157906.55,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 1850T - Nº 26',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'2010-11-01',vidaUtil:10,tipo:'Interno',valorTotal:1193629.4,valorDepreciado:-1193629.4,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 1850T - Nº 27',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'2010-11-01',vidaUtil:10,tipo:'Interno',valorTotal:1242009.66,valorDepreciado:-1242009.66,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. SEMERARO 750T (SANDRETO) - Nº 28',category:'Plastic',area:'INJETORAS DE GRANDE PORTE',inicioDepreciacao:'1997-06-01',vidaUtil:10,tipo:'Interno',valorTotal:685748.5,valorDepreciado:-685748.5,saldoParaDepreciar:0},
+          {ativo:'INJETORA HIDR. HAITIAN 1800T - Nº 29',category:'Plastic',area:'DPA',inicioDepreciacao:'2019-04-30',vidaUtil:10,tipo:'Interno',valorTotal:2385439.82,valorDepreciado:-1323173.64,saldoParaDepreciar:1062266.18},
+          {ativo:'INJETORA HIDR. HAITIAN 1850T - Nº 30',category:'Plastic',area:'DPA',inicioDepreciacao:'2014-01-31',vidaUtil:10,tipo:'Interno',valorTotal:1552707.06,valorDepreciado:-1303375.49,saldoParaDepreciar:249331.57},
+          {ativo:'INJETORA HIDR. HAITIAN 1850T - Nº 31',category:'Plastic',area:'DPA',inicioDepreciacao:'2014-01-31',vidaUtil:10,tipo:'Interno',valorTotal:1617455.67,valorDepreciado:-1351155.89,saldoParaDepreciar:266299.78},
+          {ativo:'INJETORA HIDR. HAITIAN 1850T - Nº 32',category:'Plastic',area:'DPA',inicioDepreciacao:'2014-01-31',vidaUtil:10,tipo:'Interno',valorTotal:1571819.56,valorDepreciado:-1319418.93,saldoParaDepreciar:252400.63},
+          {ativo:'CESTO INOX - TEAS',category:'Plastic',area:'DPA',inicioDepreciacao:'2017-04-30',vidaUtil:10,tipo:'Interno',valorTotal:2408496.67,valorDepreciado:-1906726.53,saldoParaDepreciar:501770.14},
+          {ativo:'CESTO INOX - MIRAMONDI',category:'Plastic',area:'DPA',inicioDepreciacao:'2023-01-31',vidaUtil:10,tipo:'Interno',valorTotal:12632463.07,valorDepreciado:-2565969.06,saldoParaDepreciar:10066494.01},
+          {ativo:'SOLDA ANEL 33',category:'Plastic',area:'DPA',inicioDepreciacao:'2010-01-01',vidaUtil:10,tipo:'Interno',valorTotal:166938.45,valorDepreciado:-166938.45,saldoParaDepreciar:0},
+          {ativo:'SOLDA ANEL 34',category:'Plastic',area:'DPA',inicioDepreciacao:'2010-01-05',vidaUtil:10,tipo:'Interno',valorTotal:211189.37,valorDepreciado:-211189.37,saldoParaDepreciar:0},
+          {ativo:'SOLDA ANEL 35',category:'Plastic',area:'DPA',inicioDepreciacao:'2002-01-12',vidaUtil:10,tipo:'Interno',valorTotal:28244.06,valorDepreciado:-28244.06,saldoParaDepreciar:0},
+          {ativo:'SOLDA ANEL 36',category:'Plastic',area:'DPA',inicioDepreciacao:'2008-01-10',vidaUtil:10,tipo:'Interno',valorTotal:322893.44,valorDepreciado:-322893.44,saldoParaDepreciar:0},
+          {ativo:'SOLDA ANEL 37',category:'Plastic',area:'DPA',inicioDepreciacao:'2002-01-11',vidaUtil:10,tipo:'Interno',valorTotal:109086.63,valorDepreciado:-109086.63,saldoParaDepreciar:0},
+          {ativo:'SOLDA ANEL 38',category:'Plastic',area:'DPA',inicioDepreciacao:'1997-01-09',vidaUtil:10,tipo:'Interno',valorTotal:174327.16,valorDepreciado:-174327.16,saldoParaDepreciar:0},
+          {ativo:'SOLDA ANEL 39',category:'Plastic',area:'DPA',inicioDepreciacao:'2023-03-31',vidaUtil:10,tipo:'Interno',valorTotal:743347.76,valorDepreciado:-148669.56,saldoParaDepreciar:594678.2},
+          {ativo:'EXTRUSORA L1',category:'Plastic',area:'DPA',inicioDepreciacao:'2014-01-31',vidaUtil:10,tipo:'Interno',valorTotal:5898286.84,valorDepreciado:-5898286.84,saldoParaDepreciar:0},
+          {ativo:'EXTRUSORA L2',category:'Plastic',area:'DPA',inicioDepreciacao:'2014-01-31',vidaUtil:10,tipo:'Interno',valorTotal:5898286.8,valorDepreciado:-5898286.8,saldoParaDepreciar:0},
+          {ativo:'PRENSA HIDR. 500T - Nº 105',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2008-12-01',vidaUtil:10,tipo:'Interno',valorTotal:1075644.03,valorDepreciado:-1075644.03,saldoParaDepreciar:0},
+          {ativo:'PRENSA GTX 400T - Nº 106',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2008-12-01',vidaUtil:10,tipo:'Interno',valorTotal:1083812.97,valorDepreciado:-1083812.97,saldoParaDepreciar:0},
+          {ativo:'PRENSA GTX 400T - Nº 107',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2008-12-01',vidaUtil:10,tipo:'Interno',valorTotal:1083812.98,valorDepreciado:-1083812.98,saldoParaDepreciar:0},
+          {ativo:'PRENSA GTX 400T - Nº 108',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2008-12-01',vidaUtil:10,tipo:'Interno',valorTotal:1083812.97,valorDepreciado:-1083812.97,saldoParaDepreciar:0},
+          {ativo:'PRENSA HIDR. 600T - Nº 109',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2016-01-31',vidaUtil:10,tipo:'Interno',valorTotal:2084637.25,valorDepreciado:-1634941.73,saldoParaDepreciar:449695.52},
+          {ativo:'PRENSA GTX 400T - Nº 110',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2016-01-31',vidaUtil:10,tipo:'Interno',valorTotal:1811213.58,valorDepreciado:-1493722.32,saldoParaDepreciar:317491.26},
+          {ativo:'PRENSA GTX 400T - Nº 111',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2016-01-31',vidaUtil:10,tipo:'Interno',valorTotal:1820491.96,valorDepreciado:-1501378.81,saldoParaDepreciar:319113.15},
+          {ativo:'PRENSA GTX 400T - Nº 112',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2016-01-31',vidaUtil:10,tipo:'Interno',valorTotal:1819631.35,valorDepreciado:-1500669.06,saldoParaDepreciar:318962.29},
+          {ativo:'PRENSA GTX 300T - Nº 113',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2014-11-30',vidaUtil:10,tipo:'Interno',valorTotal:895784.43,valorDepreciado:-801579.89,saldoParaDepreciar:94204.54},
+          {ativo:'PRENSA GTX 300T - Nº 114',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2014-11-30',vidaUtil:10,tipo:'Interno',valorTotal:1187922.0,valorDepreciado:-1020673.91,saldoParaDepreciar:167248.09},
+          {ativo:'PRENSA GTX 300T - Nº 115',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2014-11-30',vidaUtil:10,tipo:'Interno',valorTotal:1187587.6,valorDepreciado:-1015753.99,saldoParaDepreciar:171833.61},
+          {ativo:'PRENSA GTX 300T - Nº 116',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2014-11-30',vidaUtil:10,tipo:'Interno',valorTotal:1120029.83,valorDepreciado:-963276.54,saldoParaDepreciar:156753.29},
+          {ativo:'PRENSA GTX 250T - Nº 117',category:'Metal',area:'CABINET LINE',inicioDepreciacao:'2014-01-31',vidaUtil:10,tipo:'Interno',valorTotal:923249.64,valorDepreciado:-923249.64,saldoParaDepreciar:0},
+          {ativo:'PRENSA GTX 250T - Nº 118',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2014-01-31',vidaUtil:10,tipo:'Interno',valorTotal:930735.64,valorDepreciado:-930735.64,saldoParaDepreciar:0},
+          {ativo:'PRENSA GTX 250T - Nº 119',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2014-01-31',vidaUtil:10,tipo:'Interno',valorTotal:825218.24,valorDepreciado:-825218.24,saldoParaDepreciar:0},
+          {ativo:'PRENSA GTX 400T - Nº 123',category:'Metal',area:'CABINET LINE',inicioDepreciacao:'2016-01-31',vidaUtil:10,tipo:'Interno',valorTotal:1819330.71,valorDepreciado:-1500421.11,saldoParaDepreciar:318909.6},
+          {ativo:'PRENSA IMV 800T',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2022-05-31',vidaUtil:10,tipo:'Interno',valorTotal:14831784.16,valorDepreciado:-3939692.67,saldoParaDepreciar:10892091.49},
+          {ativo:'PRENSA SERVO H 300T - Nº 125',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2020-10-30',vidaUtil:10,tipo:'Interno',valorTotal:3248543.86,valorDepreciado:-1345100.21,saldoParaDepreciar:1903443.65},
+          {ativo:'PRENSA HIDR. 400T - Nº 126',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2020-12-31',vidaUtil:10,tipo:'Interno',valorTotal:3441899.99,valorDepreciado:-1371382.02,saldoParaDepreciar:2070517.97},
+          {ativo:'PRENSA LA 500T - Nº 128',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2019-02-28',vidaUtil:10,tipo:'Interno',valorTotal:39843.0,valorDepreciado:-22722.96,saldoParaDepreciar:17120.04},
+          {ativo:'PRENSA CHIN FONG GTX 400T - Nº 151',category:'Metal',area:'CABINET LINE',inicioDepreciacao:'2015-01-31',vidaUtil:10,tipo:'Interno',valorTotal:1470841.49,valorDepreciado:-1246668.91,saldoParaDepreciar:224172.58},
+          {ativo:'PRENSA CHIN FONG GTX 400T - Nº 152',category:'Metal',area:'CABINET LINE',inicioDepreciacao:'2015-01-31',vidaUtil:10,tipo:'Interno',valorTotal:1471710.79,valorDepreciado:-1247405.92,saldoParaDepreciar:224304.87},
+          {ativo:'MÁQUINA DE LASER Nº 01',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2010-09-01',vidaUtil:10,tipo:'Interno',valorTotal:484036.73,valorDepreciado:-484036.73,saldoParaDepreciar:0},
+          {ativo:'MÁQUINA DE LASER Nº 02',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2010-11-01',vidaUtil:10,tipo:'Interno',valorTotal:469805.8,valorDepreciado:-469805.8,saldoParaDepreciar:0},
+          {ativo:'LINHA DE SOLDA GABINETES Nº 1',category:'Metal',area:'CABINET LINE',inicioDepreciacao:'2013-08-31',vidaUtil:10,tipo:'Interno',valorTotal:427986.75,valorDepreciado:-427986.75,saldoParaDepreciar:0},
+          {ativo:'LINHA DE SOLDA GABINETES Nº 2',category:'Metal',area:'CABINET LINE',inicioDepreciacao:'2012-12-30',vidaUtil:10,tipo:'Interno',valorTotal:588101.96,valorDepreciado:-588101.96,saldoParaDepreciar:0},
+          {ativo:'EUROGAM',category:'Metal',area:'CABINET LINE',inicioDepreciacao:'2006-03-01',vidaUtil:10,tipo:'Interno',valorTotal:4668236.32,valorDepreciado:-4668236.32,saldoParaDepreciar:0},
+          {ativo:'LINHA DE SOLDA GABINETES Nº 4 (CLINCH)',category:'Metal',area:'CABINET LINE',inicioDepreciacao:'2020-02-28',vidaUtil:10,tipo:'Interno',valorTotal:6028200.25,valorDepreciado:-3064335.12,saldoParaDepreciar:2963865.13},
+          {ativo:'LINHA CORTE TRANSVERSAL Nº 1',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2011-02-28',vidaUtil:10,tipo:'Interno',valorTotal:1011525.65,valorDepreciado:-1011525.65,saldoParaDepreciar:0},
+          {ativo:'GUILHOTINA SORG Nº 1',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2012-09-30',vidaUtil:10,tipo:'Interno',valorTotal:77143.72,valorDepreciado:-77143.72,saldoParaDepreciar:0},
+          {ativo:'LINHA CORTE TRANSVERSAL Nº 2',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2011-02-28',vidaUtil:10,tipo:'Interno',valorTotal:946985.49,valorDepreciado:-946985.49,saldoParaDepreciar:0},
+          {ativo:'LINHA CORTE TRANSVERSAL Nº 3',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2022-01-31',vidaUtil:10,tipo:'Interno',valorTotal:398969.53,valorDepreciado:-126340.34,saldoParaDepreciar:272629.19},
+          {ativo:'LINHA DE CORTE LONGITUDINAL - SLITTER',category:'Metal',area:'PRESS SHOP',inicioDepreciacao:'2023-05-31',vidaUtil:10,tipo:'Interno',valorTotal:5681610.77,valorDepreciado:-1041628.64,saldoParaDepreciar:4639982.13},
+          {ativo:'LINHA DE CAVIDADES',category:'Metal',area:'CABINET LINE',inicioDepreciacao:'2022-05-31',vidaUtil:10,tipo:'Interno',valorTotal:79696796.73,valorDepreciado:-22580759.07,saldoParaDepreciar:57116037.66},
+          {ativo:'ARMAZÉM AUTOMÁTICO DE CAVIDADES (BUFFER)',category:'Metal',area:'CABINET LINE',inicioDepreciacao:'2024-03-31',vidaUtil:10,tipo:'Interno',valorTotal:2778833.28,valorDepreciado:-277883.33,saldoParaDepreciar:2500949.95},
+          {ativo:'INSTALACOES LINHA ESMALTACAO 2 PROJ. BERTA 2',category:'Robots',area:'ENAMELING',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:1448825.02,valorDepreciado:-536179.33,saldoParaDepreciar:912645.69},
+          {ativo:'ROBO INDUSTRIAL P/ FUNÇÃO DEFORMAÇÃO (1)',category:'Robots',area:'CABINET LINE',inicioDepreciacao:'2020-02-28',vidaUtil:10,tipo:'Interno',valorTotal:482626.32,valorDepreciado:-230001.62,saldoParaDepreciar:252624.7},
+          {ativo:'ROBO INDUSTRIAL P/ FUNÇÃO DEFORMAÇÃO (2)',category:'Robots',area:'CABINET LINE',inicioDepreciacao:'2020-02-28',vidaUtil:10,tipo:'Interno',valorTotal:482626.32,valorDepreciado:-230001.62,saldoParaDepreciar:252624.7},
+          {ativo:'ROBO INDUSTRIAL P/ FUNÇÃO DEFORMAÇÃO (3)',category:'Robots',area:'CABINET LINE',inicioDepreciacao:'2020-02-28',vidaUtil:10,tipo:'Interno',valorTotal:376243.71,valorDepreciado:-179303.65,saldoParaDepreciar:196940.06},
+          {ativo:'ROBO INDUSTRIAL P/ FUNÇÃO DEFORMAÇÃO (4)',category:'Robots',area:'CABINET LINE',inicioDepreciacao:'2020-02-28',vidaUtil:10,tipo:'Interno',valorTotal:376243.71,valorDepreciado:-179303.65,saldoParaDepreciar:196940.06},
+          {ativo:'ROBO INDUSTRIAL 6 EIXOS, MOD.IRB6700',category:'Robots',area:'CABINET LINE',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:233190.44,valorDepreciado:-85624.61,saldoParaDepreciar:147565.83},
+          {ativo:'ROBÔ1 - EUROGAM',category:'Robots',area:'CABINET LINE',inicioDepreciacao:'2006-03-01',vidaUtil:10,tipo:'Interno',valorTotal:4668236.32,valorDepreciado:-4668236.32,saldoParaDepreciar:0},
+          {ativo:'ROBO INDUSTRIAL 6 EIXOS MODELO IRB6640',category:'Robots',area:'CABINET LINE',inicioDepreciacao:'2014-09-30',vidaUtil:10,tipo:'Interno',valorTotal:262366.1,valorDepreciado:-262366.1,saldoParaDepreciar:0},
+          {ativo:'ROBO INDUSTRIAL 6 EIXOS P/ PRENSAS MOD.IRB6640',category:'Robots',area:'CABINET LINE',inicioDepreciacao:'2014-09-30',vidaUtil:10,tipo:'Interno',valorTotal:239516.12,valorDepreciado:-239516.12,saldoParaDepreciar:0},
+          {ativo:'ROBO INDUSTRIAL 6 EIXOS P/ PRENSAS MOD.IRB6640 S:6640103898',category:'Robots',area:'CABINET LINE',inicioDepreciacao:'2014-09-30',vidaUtil:10,tipo:'Interno',valorTotal:238281.08,valorDepreciado:-238281.08,saldoParaDepreciar:0},
+          {ativo:'AUTOMACAO P/ ARMAZENAGEM CORPO GABINETE',category:'Robots',area:'CABINET LINE',inicioDepreciacao:'2022-01-31',vidaUtil:10,tipo:'Interno',valorTotal:580851.39,valorDepreciado:-172440.26,saldoParaDepreciar:408411.13},
+          {ativo:'ROBO ABB IRB , MOD. 6700-150/3.20',category:'Robots',area:'CABINET LINE',inicioDepreciacao:'2023-03-31',vidaUtil:10,tipo:'Interno',valorTotal:322127.22,valorDepreciado:-60398.86,saldoParaDepreciar:261728.36},
+          {ativo:'LINHA AUTOMATICA DE FABRICACAO DE CAVIDADES',category:'Robots',area:'CABINET LINE',inicioDepreciacao:'2022-05-31',vidaUtil:10,tipo:'Interno',valorTotal:79696796.73,valorDepreciado:-22580759.07,saldoParaDepreciar:57116037.66},
+          {ativo:'Robo Tombador L2',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2019-06-30',vidaUtil:10,tipo:'Interno',valorTotal:169605.08,valorDepreciado:-91427.75,saldoParaDepreciar:78177.33},
+          {ativo:'Robo Engraxa Gabinete L3',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2015-04-30',vidaUtil:10,tipo:'Interno',valorTotal:123299.66,valorDepreciado:-121260.53,saldoParaDepreciar:2039.13},
+          {ativo:'Robo Parafusamento da Transmissao Lado A',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2017-05-31',vidaUtil:10,tipo:'Interno',valorTotal:148003.59,valorDepreciado:-128817.94,saldoParaDepreciar:19185.65},
+          {ativo:'Robo Parafusamento Travessa L3',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2018-05-31',vidaUtil:10,tipo:'Interno',valorTotal:95183.28,valorDepreciado:-80464.21,saldoParaDepreciar:14719.07},
+          {ativo:'Robo Tombador L3',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2018-05-31',vidaUtil:10,tipo:'Interno',valorTotal:95183.28,valorDepreciado:-80464.21,saldoParaDepreciar:14719.07},
+          {ativo:'Robo 1 Pezinho L3',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2018-05-31',vidaUtil:10,tipo:'Interno',valorTotal:95183.28,valorDepreciado:-80464.21,saldoParaDepreciar:14719.07},
+          {ativo:'Robo 2 Pezinho L3',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2018-05-31',vidaUtil:10,tipo:'Interno',valorTotal:95183.28,valorDepreciado:-80464.21,saldoParaDepreciar:14719.07},
+          {ativo:'Robo Pega Gabinete L3',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2018-05-31',vidaUtil:10,tipo:'Interno',valorTotal:114556.5,valorDepreciado:-96841.58,saldoParaDepreciar:17714.92},
+          {ativo:'Robo Parafusamento do Motor L3',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2018-03-31',vidaUtil:10,tipo:'Interno',valorTotal:104309.04,valorDepreciado:-90329.47,saldoParaDepreciar:13979.57},
+          {ativo:'Robo do Topo L3',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2018-05-31',vidaUtil:10,tipo:'Interno',valorTotal:123299.66,valorDepreciado:-121260.53,saldoParaDepreciar:2039.13},
+          {ativo:'Robo Parafusamento da Transmissao Lado B',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2019-07-31',vidaUtil:10,tipo:'Interno',valorTotal:164541.7,valorDepreciado:-87412.77,saldoParaDepreciar:77128.93},
+          {ativo:'Linha 4 Parafusamento ROBO 1',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2023-08-31',vidaUtil:10,tipo:'Interno',valorTotal:161412.27,valorDepreciado:-23959.64,saldoParaDepreciar:137452.63},
+          {ativo:'Linha 4 Parafusamento ROBO 2',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2023-08-31',vidaUtil:10,tipo:'Interno',valorTotal:161412.25,valorDepreciado:-23959.64,saldoParaDepreciar:137452.61},
+          {ativo:'Linha 4 CAVIDADE ROBO',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2023-08-31',vidaUtil:10,tipo:'Interno',valorTotal:183470.09,valorDepreciado:-27233.84,saldoParaDepreciar:156236.25},
+          {ativo:'Linha 4 Robo Tombador',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2023-08-31',vidaUtil:10,tipo:'Interno',valorTotal:185084.24,valorDepreciado:-27473.44,saldoParaDepreciar:157610.8},
+          {ativo:'Celula de Colagem de Portas L4 ROBO 1',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2023-12-31',vidaUtil:10,tipo:'Interno',valorTotal:173552.26,valorDepreciado:-24104.48,saldoParaDepreciar:149447.78},
+          {ativo:'Celula de Colagem de Portas L4 ROBO 2',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2023-12-31',vidaUtil:10,tipo:'Interno',valorTotal:197205.99,valorDepreciado:-27389.72,saldoParaDepreciar:169816.27},
+          {ativo:'Celula de Colagem de Portas L4 ROBO 3',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2023-12-31',vidaUtil:10,tipo:'Interno',valorTotal:173552.26,valorDepreciado:-24104.48,saldoParaDepreciar:149447.78},
+          {ativo:'Celula de Colagem de Portas L4 ROBO 4',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2023-12-31',vidaUtil:10,tipo:'Interno',valorTotal:173552.26,valorDepreciado:-24104.48,saldoParaDepreciar:149447.78},
+          {ativo:'Celula de Colagem de Portas L4 ROBO 5',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2023-12-31',vidaUtil:10,tipo:'Interno',valorTotal:173552.26,valorDepreciado:-24104.48,saldoParaDepreciar:149447.78},
+          {ativo:'Linha 5 Parafusamento ROBO 1',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:173552.26,valorDepreciado:-24104.48,saldoParaDepreciar:149447.78},
+          {ativo:'Linha 5 Parafusamento ROBO 2',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:173552.26,valorDepreciado:-24104.48,saldoParaDepreciar:149447.78},
+          {ativo:'Linha 5 CAVIDADE ROBO',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-01-31',vidaUtil:10,tipo:'Interno',valorTotal:182602.43,valorDepreciado:-71329.08,saldoParaDepreciar:111273.35},
+          {ativo:'Celula de Colagem de Painel ROBO 2',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2022-05-31',vidaUtil:10,tipo:'Interno',valorTotal:13800.0,valorDepreciado:-3665.63,saldoParaDepreciar:10134.37},
+          {ativo:'Robo Motoventilador',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:173552.26,valorDepreciado:-24104.48,saldoParaDepreciar:149447.78},
+          {ativo:'Celula de Colagem de Painel ROBO 1',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:205089.6,valorDepreciado:-75306.34,saldoParaDepreciar:129783.26},
+          {ativo:'Celula de Colagem de Painel ROBO 3',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:155612.73,valorDepreciado:-57139.04,saldoParaDepreciar:98473.69},
+          {ativo:'Celula de Colagem de Portas L5 ROBO 1',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:155612.73,valorDepreciado:-57139.04,saldoParaDepreciar:98473.69},
+          {ativo:'Celula de Colagem de Portas L5 ROBO 2',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:205089.6,valorDepreciado:-75306.34,saldoParaDepreciar:129783.26},
+          {ativo:'Celula de Colagem de Portas L5 ROBO 3',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:155612.73,valorDepreciado:-57139.04,saldoParaDepreciar:98473.69},
+          {ativo:'Celula de Colagem de Portas L5 ROBO 4',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:155612.73,valorDepreciado:-57139.04,saldoParaDepreciar:98473.69},
+          {ativo:'Celula de Colagem de Portas L5 ROBO 5',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:155612.73,valorDepreciado:-57139.04,saldoParaDepreciar:98473.69},
+          {ativo:'Celula de colagem de Mesa ROBO 1',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:173552.26,valorDepreciado:-24104.48,saldoParaDepreciar:149447.78},
+          {ativo:'Celula de colagem de Mesa ROBO 2',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:173552.26,valorDepreciado:-24104.48,saldoParaDepreciar:149447.78},
+          {ativo:'Celula de colagem de Mesa ROBO 3',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:173552.26,valorDepreciado:-24104.48,saldoParaDepreciar:149447.78},
+          {ativo:'Celula de colagem de Mesa ROBO 4',category:'Robots',area:'ASSEMBLY LINES',inicioDepreciacao:'2021-04-30',vidaUtil:10,tipo:'Interno',valorTotal:173552.26,valorDepreciado:-24104.48,saldoParaDepreciar:149447.78},
+          {ativo:'ROBO INDUSTRIAL 6 EIXOS MR.ABB MOD.IRB6640 S:6640106174',category:'Robots',area:'PRESS SHOP',inicioDepreciacao:'2014-09-30',vidaUtil:10,tipo:'Interno',valorTotal:130630.11,valorDepreciado:-130630.11,saldoParaDepreciar:0},
+          {ativo:'ROBO INDUSTRIAL ABB IRB 6640 130KG',category:'Robots',area:'PRESS SHOP',inicioDepreciacao:'2014-08-31',vidaUtil:10,tipo:'Interno',valorTotal:129517.58,valorDepreciado:-129517.58,saldoParaDepreciar:0},
+          {ativo:'ROBO INDUSTRIAL 6 EIXOS MOD.IRB6700',category:'Robots',area:'PRESS SHOP',inicioDepreciacao:'2016-01-31',vidaUtil:10,tipo:'Interno',valorTotal:175916.8,valorDepreciado:-145080.44,saldoParaDepreciar:30836.36},
+          {ativo:'ROBO INDUSTRIAL KUKA KR 60-3',category:'Robots',area:'PRESS SHOP',inicioDepreciacao:'2019-06-30',vidaUtil:10,tipo:'Interno',valorTotal:169605.08,valorDepreciado:-91427.75,saldoParaDepreciar:78177.33},
+          {ativo:'ROBO INDUSTRIAL IRB4600',category:'Robots',area:'PRESS SHOP',inicioDepreciacao:'2019-07-31',vidaUtil:10,tipo:'Interno',valorTotal:164541.7,valorDepreciado:-87412.77,saldoParaDepreciar:77128.93},
+          {ativo:'ROBO IND. ABB IRB 6700',category:'Robots',area:'PRESS SHOP',inicioDepreciacao:'2021-01-31',vidaUtil:10,tipo:'Interno',valorTotal:183485.25,valorDepreciado:-71673.92,saldoParaDepreciar:111811.33},
+          {ativo:'ROBO INDU. ABB IRB 6700',category:'Robots',area:'PRESS SHOP',inicioDepreciacao:'2021-01-31',vidaUtil:10,tipo:'Interno',valorTotal:247761.91,valorDepreciado:-96782.0,saldoParaDepreciar:150979.91},
+          {ativo:'MOINHO GRANULADOR MOD.MGHS',category:'Plastic',area:'DPA',inicioDepreciacao:'2010-01-11',vidaUtil:10,tipo:'Interno',valorTotal:186030.22,valorDepreciado:-186030.22,saldoParaDepreciar:0},
+          {ativo:'TRANSPORTADOR AEREO DE CORRENTE N.04',category:'Assembly',area:'SFA',inicioDepreciacao:'1973-12-31',vidaUtil:10,tipo:'Interno',valorTotal:471718.41,valorDepreciado:-471718.41,saldoParaDepreciar:0},
+          {ativo:'TRANSPORTADOR AEREO DE CORRENTE NR.05',category:'Assembly',area:'SFA',inicioDepreciacao:'2008-10-01',vidaUtil:10,tipo:'Interno',valorTotal:949510.48,valorDepreciado:-949510.48,saldoParaDepreciar:0},
+          {ativo:'TRANSPORTADOR AEREO DE PROD. ACABADO P1',category:'Assembly',area:'SFA',inicioDepreciacao:'2014-01-31',vidaUtil:10,tipo:'Interno',valorTotal:264472.95,valorDepreciado:-264472.95,saldoParaDepreciar:0},
+          {ativo:'TRANSPORTADOR AEREO N.06',category:'Assembly',area:'SFA',inicioDepreciacao:'2014-11-30',vidaUtil:10,tipo:'Interno',valorTotal:547678.78,valorDepreciado:-538344.95,saldoParaDepreciar:9333.83},
+          {ativo:'TRANSPORTADOR AEREO DE CORRENTE NR. 02',category:'Assembly',area:'SFA',inicioDepreciacao:'2000-06-01',vidaUtil:10,tipo:'Interno',valorTotal:200266.87,valorDepreciado:-200266.87,saldoParaDepreciar:0},
+          {ativo:'TRANSPORTADOR AEREO DE CORRENTE N.03',category:'Assembly',area:'SFA',inicioDepreciacao:'2008-03-01',vidaUtil:10,tipo:'Interno',valorTotal:356201.54,valorDepreciado:-356201.54,saldoParaDepreciar:0},
+          {ativo:'CONJ. TRANSPORTADOR AEREO DE CESTO INOX',category:'Assembly',area:'SFA',inicioDepreciacao:'2019-03-31',vidaUtil:10,tipo:'Interno',valorTotal:22782.21,valorDepreciado:-13669.32,saldoParaDepreciar:9112.89},
+          {ativo:'TRANSPORTADOR AEREO ESMALTACAO/FORNO (BERTA)',category:'Assembly',area:'SFA',inicioDepreciacao:'2019-07-31',vidaUtil:10,tipo:'Interno',valorTotal:1664258.94,valorDepreciado:-943080.06,saldoParaDepreciar:721178.88}
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Component Data ---
+            const canhaoData = { '01': { status: 'Troca de canhão novo', data: 'out-20', idade: 4.9 }, '03': { status: 'Troca de canhão reformado (wortex)', data: 'out-20', idade: 4.9 }, '04': { status: 'Troca de canhão reformado (wortex)', data: 'mar-23', idade: 2.5 }, '16': { status: 'Trocado canhão novo', data: 'dez-20', idade: 4.7 }, '17': { status: 'Trocado canhão novo L3 MX', data: 'abr-24', idade: 1.4 }, '18': { status: 'Trocado canhão novo', data: 'jan-21', idade: 4.6 }, '19': { status: 'Trocado canhão (reformado) em 01/07/2013', data: 'abr-17', idade: 8.4 }, '20': { status: 'Trocado canhão (reformado)em 01/12/2020', data: 'dez-19', idade: 5.7 }, '21': { status: 'Trocado canhão novo', data: 'out-22', idade: 2.9 }, '22': { status: 'Original de fábrica (novo)', data: 'jan-24', idade: 1.6 }, '23': { status: 'Trocado canhão novo 150mm em 01/02/2017 (novo)', data: 'abr-17', idade: 8.4 }, '24': { status: 'Trocado canhão novo 150mm em 01/02/2017 (novo)', data: 'abr-17', idade: 8.4 }, '25': { status: 'Trocado canhão novo 150mm em 18/11/2024 (novo)', data: 'nov-24', idade: 0.8 }, '26': { status: 'N/A', data: 'out-10', idade: 14.9 }, '27': { status: 'Trocado canhão (reformado) em 01/02/2017 LGMT', data: 'fev-17', idade: 8.6 }, '29': { status: 'N/A', data: 'mai-19', idade: 6.3 }, '30': { status: 'Trocado canhão 150mm em 01/07/2013 (novo)', data: 'jul-15', idade: 10.1 }, '31': { status: 'Trocado canhão 150mm em 01/07/2023 (novo)L3MX', data: 'jul-23', idade: 2.1 }, '32': { status: 'Trocado canhão 150mm em 01/07/2013 (novo)', data: 'jul-15', idade: 10.1 } };
+            const ponteiraData = { '01': { reparo: null, anterior: '2023-11-04', atual: '2025-04-10', desgaste: '', medidas: '90mm', canhao: '' }, '02': { reparo: null, anterior: '2024-08-04', atual: '2025-02-02', desgaste: '', medidas: '90mm', canhao: '' }, '03': { reparo: null, anterior: '2021-09-12', atual: '2025-02-09', desgaste: '', medidas: '', canhao: '' }, '04': { reparo: null, anterior: null, atual: '2023-03-25', desgaste: '', medidas: '', canhao: '' }, '05': { reparo: null, anterior: '2022-03-10', atual: '2025-03-06', desgaste: '', medidas: '', canhao: '' }, '06': { reparo: null, anterior: '2021-08-15', atual: '2023-07-14', desgaste: '?', medidas: '', canhao: '' }, '07': { reparo: null, anterior: '2019-09-02', atual: '2023-10-20', desgaste: '', medidas: '', canhao: '' }, '09': { reparo: null, anterior: null, atual: '2024-01-04', desgaste: '', medidas: '', canhao: '' }, '10': { reparo: null, anterior: '2021-02-14', atual: '2024-01-04', desgaste: '', medidas: '85mm', canhao: 'Ponteira curta' }, '11': { reparo: null, anterior: '2020-09-26', atual: '2020-09-26', desgaste: '', medidas: '', canhao: '' }, '12': { reparo: null, anterior: '2022-06-09', atual: '2025-12-02', desgaste: '', medidas: '85mm', canhao: 'Ponteira curta' }, '13': { reparo: null, anterior: '2018-10-27', atual: '2025-03-20', desgaste: 'PONTEIRA SEM DESGASTE NÃO FOI TRCADO', medidas: '', canhao: '' }, '14': { reparo: '2025-04-09', anterior: null, atual: '2025-08-09', desgaste: '', medidas: '95mm', canhao: 'Ponteira curta' }, '15': { reparo: null, anterior: '2022-04-15', atual: '2025-02-05', desgaste: 'PONTEIRA SEM DESGASTE NÃO FOI TRCADO', medidas: '105mm', canhao: 'Ponteira curta' }, '16': { reparo: null, anterior: '2020-12-12', atual: '2023-07-14', desgaste: 'NÃO TINHA DESGASTE', medidas: '140mm', canhao: 'Ponteira longa' }, '17': { reparo: null, anterior: '2019-05-24', atual: '2023-04-29', desgaste: 'NÃO TINHA DESGASTE (anterior com desgaste 2mm)', medidas: '140mm', canhao: 'Ponteira curta' }, '18': { reparo: null, anterior: '2025-04-29', atual: '2024-05-15', desgaste: 'FOI VERIFICADO, PONTEIRA SEM DESGASTE', medidas: '140mm', canhao: 'Ponteira longa' }, '19': { reparo: '2018-11-12', anterior: '2018-11-12', atual: '2022-08-27', desgaste: 'ponteira da ponta fina/foi verificada 20/01/2024', medidas: '140mm', canhao: 'Ponteira longa' }, '20': { reparo: null, anterior: null, atual: null, desgaste: '', medidas: '140mm', canhao: 'Ponteira' }, '21': { reparo: null, anterior: '2020-09-28', atual: '2025-02-15', desgaste: 'NÃO TINHA DESGASTE', medidas: '140mm', canhao: 'Ponteira' }, '23': { reparo: null, anterior: '2019-06-01', atual: '2025-03-25', desgaste: 'foi trocado a rosca e ponteira', medidas: '150mm', canhao: 'Ponteira longa' }, '24': { reparo: null, anterior: null, atual: '2025-04-04', desgaste: '', medidas: '150mm', canhao: '150mm' }, '25': { reparo: null, anterior: '2019-04-02', atual: '2023-10-02', desgaste: '', medidas: '140mm', canhao: 'Ponteira longa' }, '26': { reparo: null, anterior: '2023-08-16', atual: null, desgaste: '', medidas: '140mm/545comp', canhao: '' }, '27': { reparo: null, anterior: null, atual: '2023-09-16', desgaste: 'ponteira com rosca diferente', medidas: '140mm', canhao: 'Ponteira curta' }, '28': { reparo: null, anterior: '2023-05-01', atual: '2023-08-15', desgaste: '', medidas: '95mm', canhao: '' }, '29': { reparo: null, anterior: null, atual: '2023-08-25', desgaste: '', medidas: '', canhao: '' }, '30': { reparo: null, anterior: '2022-03-10', atual: '2022-03-10', desgaste: '', medidas: '150mm', canhao: 'Ponteira longa' }, '31': { reparo: 'recuperada l3mx', anterior: '2022-06-05', atual: '2023-05-28', desgaste: '21mm (1 ano)', medidas: '150mm', canhao: 'Ponteira longa' }, '32': { reparo: null, anterior: '2022-06-03', atual: '2023-06-08', desgaste: '(2 anos)', medidas: '150mm', canhao: 'Ponteira longa' } };
+            const cilindroData = { '03': { fechamento: '2023-03-10', injecao: '2023-03-10', encosto: '2023-03-10', sapatas: 'N/A' }, '04': { fechamento: '2023-03-25', injecao: '2023-03-25', encosto: '2023-03-25', sapatas: 'N/A' }, '05': { fechamento: '2023-05-09', injecao: '2023-05-09', encosto: '2023-05-09', sapatas: 'N/A' }, '06': { fechamento: '2023-07-14', injecao: '2023-07-14', encosto: '2023-07-14', sapatas: 'N/A' }, '09': { fechamento: '2023-12-27', injecao: '2023-12-27', encosto: '2023-12-27', sapatas: 'N/A' }, '10': { fechamento: '2023-12-27', injecao: '2023-12-27', encosto: '2023-12-27', sapatas: 'N/A' }, '14': { fechamento: '2023-11-26', injecao: null, encosto: null, sapatas: null }, '15': { fechamento: null, injecao: '2023-08-15', encosto: '2023-08-15', sapatas: 'N/A' }, '16': { fechamento: '2023-06-14', injecao: '2023-06-14', encosto: '2023-06-14', sapatas: '2023-06-14' }, '17': { fechamento: '2023-01-09', injecao: '2023-04-29', encosto: '2023-01-09', sapatas: '2023-04-29' }, '18': { fechamento: '2023-04-21', injecao: '2023-04-08', encosto: '2023-04-08', sapatas: null }, '19': { fechamento: '2023-05-12', injecao: '2023-05-12', encosto: '2023-05-12', sapatas: '2024-01-20' }, '20': { fechamento: '2024-01-07', injecao: '2024-01-07', encosto: '2024-01-07', sapatas: '2024-01-07' }, '21': { fechamento: '2023-07-21', injecao: '2023-07-21', encosto: '2023-07-21', sapatas: '2023-07-21' }, '23': { fechamento: '2023-09-23', injecao: '2023-09-23', encosto: '2023-09-23', sapatas: '2023-09-16' }, '24': { fechamento: '2023-06-03', injecao: '2023-04-08', encosto: '2023-04-08', sapatas: null }, '25': { fechamento: '2023-09-30', injecao: '2023-09-30', encosto: '2023-09-30', sapatas: '2023-09-30' }, '26': { fechamento: '2023-08-15', injecao: '2023-08-15', encosto: '2023-08-15', sapatas: '2023-09-01' }, '27': { fechamento: '2023-09-16', injecao: '2023-09-16', encosto: '2023-09-16', sapatas: '2023-09-16' }, '28': { fechamento: '2023-04-20', injecao: '2023-08-15', encosto: '2023-04-20', sapatas: 'N/A' }, '29': { fechamento: null, injecao: null, encosto: '2023-08-15', sapatas: 'N/A' }, '30': { fechamento: '2023-12-29', injecao: '2023-12-29', encosto: '2023-12-29', sapatas: '2023-12-29' }, '31': { fechamento: '2023-05-28', injecao: '2023-04-20', encosto: '2023-05-28', sapatas: '2023-01-04' }, '32': { fechamento: '2023-06-08', injecao: '2023-06-08', encosto: '2023-06-08', sapatas: '2023-06-08' } };
+            const extrusoraData = {
+                'L1': {
+                    matriz: { proximaData: '11/08/2025', ultimaTroca: '09/03/2024' },
+                    barril: { data: '19/07/2025', status: 'foi trocados os 10 barris' },
+                    rosca: { data: '19/07/2025', status: 'foi trocado a rosca inteira com D2 ate na degasagem e depois da degasagem foi montado com M4' }
+                },
+                'L2': {
+                    matriz: { proximaData: '29/07/2025', ultimaTroca: '01/11/2024' },
+                    barril: { data: '08/11/2024', status: 'foi trocado 6 modulo do barril 08/11/2024- Foi trocado 4 barril 16/12/2024 e rosca' },
+                    rosca: { data: '10/05/2025', status: 'foi trocadoos modulos até na degasagem com modulo M4' }
+                }
+            };
+            
+            // --- Dados Reais de Performance ---
+            const realPerformanceData = `Ativo	BDR (%)	MTBF	MTTR	Mês Ano
+CABINE PINTURA MULTICOLOR		16.43		012025
+CESTO INOX - MIRAMONDI	5.05%	8.44	0.43	012025
+CESTO INOX - TEAS	5.56%	14.9	0.83	012025
+EXTRUSÃO 01	10.75%	12.36	1.33	012025
+EXTRUSÃO 02	7.65%	25.14	1.92	012025
+INJ HAITIAN 1800T 16	0.23%	119.89	0.28	012025
+INJ HAITIAN 1800T 17	0.84%	53.98	0.45	012025
+INJ HAITIAN 1800T 18	1.07%	48.9	0.52	012025
+INJ HAITIAN 1800T 19	0.31%	165.86	0.51	012025
+INJ HAITIAN 1800T 20	0.82%	158.07	1.3	012025
+INJ HAITIAN 1800T 21	0.91%	94.71	0.86	012025
+INJ HAITIAN 1800T 22	0.22%	122.23	0.26	012025
+INJ HAITIAN 1850T 23	1.10%	51.69	0.57	012025
+INJ HAITIAN 1850T 24	0.24%	163.77	0.39	012025
+INJ HAITIAN 1850T 25	0.27%	84.23	0.23	012025
+INJ HAITIAN 1850T 26	0.53%	118.76	0.63	012025
+INJ HAITIAN 1850T 27	1.16%	43.08	0.5	012025
+INJ HAITIAN 1850T 29	0.19%	104.52	0.2	012025
+INJ HAITIAN 1850T 30	0.26%	168.21	0.44	012025
+INJ HAITIAN 1850T 31		66.13		012025
+INJ HAITIAN 1850T 32	0.63%	125.74	0.8	012025
+INJ HAITIAN 600 T 09		458.28		012025
+INJ HAITIAN 600 T 10	4.58%	24.34	1.12	012025
+INJ HAITIAN 600T 03	0.67%	236.32	1.57	012025
+INJ HAITIAN 600T 04	3.01%	45.91	1.38	012025
+INJ HAITIAN 600T 05	1.53%	23.97	0.37	012025
+INJ HAITIAN 600T 06	0.20%	156.35	0.31	012025
+INJ HAITIAN 750T 01	2.43%	43.98	1.07	012025
+INJ HAITIAN 750T 02	2.43%	58.65	1.43	012025
+INJ SEMERARO 1000T 14	5.32%	15.29	0.81	012025
+INJ SEMERARO 1300T 15	0.96%	59.82	0.58	012025
+INJ SEMERARO 750T 28	2.25%	42.64	0.96	012025
+INJ ZHAFIR 600T 07	0.22%	94.22	0.21	012025
+INJ ZHAFIR 600T 11	1.20%	50.61	0.61	012025
+INJ ZHAFIR 600T 12	0.64%	93.56	0.59	012025
+INJ ZHAFIR 600T 13	0.13%	168.13	0.22	012025
+LINHA CAVIDADES SARES	10.70%	10.42	1.12	012025
+LN 01 CORTE TRANSVERSAL 101	2.88%	27.9	0.8	012025
+LN 01 ESMALTACAO 164	0.47%	106.66	0.5	012025
+LN 01 ESMALTAÇÃO CAVID 166	0.12%	123.66	0.15	012025
+LN 01 PINT ELETROSTÁTICA 158	0.37%	49.49	0.18	012025
+LN 01 PINT ELETROSTÁTICA 159	0.22%	68.91	0.16	012025
+LN 01 SEMI AUT FAB GAB 153	3.08%	12.96	0.4	012025
+LN 02 CORTE TRANSVERSAL 102	3.81%	17.7	0.68	012025
+LN 02 ESMALTACAO 165	0.73%	61.47	0.45	012025
+LN 02 ESMALTAÇÃO CAVID 167	0.51%	88.71	0.45	012025
+LN 02 PINT ELETROSTÁTICA 159	5.14%	16.66	0.86	012025
+LN 02 SEMI AUT FAB GAB 154	2.62%	14.15	0.37	012025
+LN 03 AUT FAB GAB EUROGAM 156	4.35%	10.82	0.47	012025
+LN 04 AUT GABINETES MED/ALT	7.33%	7.46	0.55	012025
+LN 103 TRANSVERSAL	1.00%	75.04	0.75	012025
+MAQ SOLDA ANEL 33	0.47%	80.16	0.38	012025
+MAQ SOLDA ANEL 34	1.52%	39.05	0.59	012025
+MAQ SOLDA ANEL 35	0.47%	110.06	0.52	012025
+MAQ SOLDA ANEL 36	0.44%	114.15	0.5	012025
+MAQ SOLDA ANEL 38	0.21%	98.28	0.21	012025
+MAQ SOLDA ANEL 39	100.00%	0.03	0.03	012025
+PRENSA HID 500T - DESS 105	7.17%	18.65	1.34	012025
+PRENSA M GTX250T AUT CFONG 119	3.30%	18.74	0.62	012025
+PRENSA M GTX250T PRG CFONG 117	0.16%	117.1	0.19	012025
+PRENSA M GTX300T - C FONG 113	3.83%	16.75	0.64	012025
+PRENSA M GTX300T - C FONG 116	0.81%	39.67	0.32	012025
+PRENSA M GTX400T - C FONG 107	1.14%	32.54	0.37	012025
+PRENSA M GTX400T - C FONG 108	0.49%	40.5	0.2	012025
+PRENSA M GTX400T AUT CFONG 111	2.80%	15.38	0.43	012025
+PRENSA M GTX400T AUT CFONG 123	4.09%	10.42	0.43	012025
+PRENSA M GTX400T AUT CFONG 151	1.77%	26.98	0.48	012025
+PRENSA MECÂNICA 800 T	4.86%	12.65	0.61	012025
+PRENSA SER S300T - JUNDIAÍ 125	0.82%	45.07	0.37	012025
+PRENSA TOX 127		146.74		012025
+CABINE PINTURA MULTICOLOR	1.66%	36.38	0.6	022025
+CESTO INOX - MIRAMONDI	3.57%	12.68	0.45	022025
+CESTO INOX - TEAS	8.12%	8.97	0.73	022025
+EXTRUSÃO 01	7.34%	15.61	1.15	022025
+EXTRUSÃO 02	3.57%	32.45	1.16	022025
+INJ HAITIAN 1800T 16	0.41%	116.55	0.48	022025
+INJ HAITIAN 1800T 17	0.16%	113.49	0.18	022025
+INJ HAITIAN 1800T 18	1.25%	53.78	0.67	022025
+INJ HAITIAN 1800T 19	0.26%	73.33	0.19	022025
+INJ HAITIAN 1800T 20	0.12%	109.04	0.13	022025
+INJ HAITIAN 1800T 21	4.77%	25.31	1.21	022025
+INJ HAITIAN 1800T 22	0.15%	80.41	0.12	022025
+INJ HAITIAN 1850T 23	1.21%	52.96	0.64	022025
+INJ HAITIAN 1850T 24	2.21%	62.58	1.38	022025
+INJ HAITIAN 1850T 25	0.31%	130.37	0.41	022025
+INJ HAITIAN 1850T 26	1.33%	73.1	0.97	022025
+INJ HAITIAN 1850T 27	0.64%	50.23	0.32	022025
+INJ HAITIAN 1850T 29	1.37%	54.6	0.75	022025
+INJ HAITIAN 1850T 30	1.43%	28.8	0.41	022025
+INJ HAITIAN 1850T 31	0.66%	64.29	0.42	022025
+INJ HAITIAN 1850T 32	0.91%	60	0.55	022025
+INJ HAITIAN 600 T 09	1.39%	87.27	1.21	022025
+INJ HAITIAN 600 T 10	0.56%	65.08	0.36	022025
+INJ HAITIAN 600T 03	3.15%	24.65	0.78	022025
+INJ HAITIAN 600T 04	7.00%	49.42	3.46	022025
+INJ HAITIAN 600T 05	3.84%	18.96	0.73	022025
+INJ HAITIAN 600T 06	2.30%	38.26	0.88	022025
+INJ HAITIAN 750T 01	0.78%	138.2	1.07	022025
+INJ HAITIAN 750T 02	1.01%	90.59	0.92	022025
+INJ SEMERARO 1000T 14	0.83%	40.38	0.34	022025
+INJ SEMERARO 1300T 15	1.04%	84.92	0.88	022025
+INJ SEMERARO 750T 28	1.42%	39.37	0.56	022025
+INJ ZHAFIR 600T 07	4.87%	41.24	2.01	022025
+INJ ZHAFIR 600T 11	2.58%	31.49	0.81	022025
+INJ ZHAFIR 600T 12	1.43%	51.64	0.74	022025
+INJ ZHAFIR 600T 13	4.25%	34.68	1.48	022025
+LINHA CAVIDADES SARES	6.08%	12.67	0.77	022025
+LN 01 CORTE TRANSVERSAL 101	3.15%	15.27	0.48	022025
+LN 01 ESMALTACAO 164	9.11%	28.81	2.62	022025
+LN 01 ESMALTAÇÃO CAVID 166	2.08%	26.68	0.55	022025
+LN 01 PINT ELETROSTÁTICA 159	0.38%	124.02	0.47	022025
+LN 01 SEMI AUT FAB GAB 153	4.07%	8.78	0.36	022025
+LN 02 CORTE TRANSVERSAL 102	5.82%	12.36	0.72	022025
+LN 02 ESMALTACAO 165	9.72%	23.8	2.31	022025
+LN 02 ESMALTAÇÃO CAVID 167	0.35%	45.5	0.16	022025
+LN 02 SEMI AUT FAB GAB 154	1.85%	11.44	0.21	022025
+LN 03 AUT FAB GAB EUROGAM 156	8.42%	11.36	0.96	022025
+LN 04 AUT GABINETES MED/ALT	5.85%	6.98	0.41	022025
+LN 103 TRANSVERSAL	0.35%	81	0.28	022025
+MAQ SOLDA ANEL 33	1.79%	46.33	0.83	022025
+MAQ SOLDA ANEL 34	0.37%	69.3	0.25	022025
+MAQ SOLDA ANEL 35	1.15%	31.94	0.37	022025
+MAQ SOLDA ANEL 36	1.14%	38.74	0.44	022025
+MAQ SOLDA ANEL 37		83.3		022025
+MAQ SOLDA ANEL 38	0.85%	47.39	0.4	022025
+PRENSA HID 500T - DESS 105	2.43%	28.34	0.69	022025
+PRENSA M GTX250T AUT CFONG 119	5.71%	7.73	0.44	022025
+PRENSA M GTX250T PRG CFONG 117	0.45%	43.93	0.2	022025
+PRENSA M GTX300T - C FONG 113	9.35%	5.47	0.51	022025
+PRENSA M GTX300T - C FONG 116	1.34%	25.97	0.35	022025
+PRENSA M GTX400T - C FONG 107	5.11%	12.48	0.64	022025
+PRENSA M GTX400T - C FONG 108	1.61%	30.62	0.49	022025
+PRENSA M GTX400T AUT CFONG 111	11.66%	4.63	0.54	022025
+PRENSA M GTX400T AUT CFONG 123	2.54%	13.54	0.34	022025
+PRENSA M GTX400T AUT CFONG 151	2.72%	16.19	0.44	022025
+PRENSA MECÂNICA 800 T	2.94%	13.77	0.4	022025
+PRENSA SER S300T - JUNDIAÍ 125	1.70%	28.17	0.48	022025
+PRENSA TOX 127	0.05%	247.72	0.12	022025
+CABINE PINTURA MULTICOLOR	0.01%	323.14	0.04	032025
+CESTO INOX - MIRAMONDI	7.06%	8.57	0.61	032025
+CESTO INOX - TEAS	5.63%	8.67	0.49	032025
+EXTRUSÃO 01	7.01%	25.45	1.78	032025
+EXTRUSÃO 02	2.24%	65.39	1.46	032025
+INJ HAITIAN 1800T 16	0.33%	184.08	0.6	032025
+INJ HAITIAN 1800T 17	0.47%	535.73	2.53	032025
+INJ HAITIAN 1800T 18	0.52%	115.85	0.6	032025
+INJ HAITIAN 1800T 19	2.42%	44.92	1.09	032025
+INJ HAITIAN 1800T 20	0.55%	92.32	0.51	032025
+INJ HAITIAN 1800T 21	0.64%	137.2	0.88	032025
+INJ HAITIAN 1800T 22	0.36%	134.17	0.49	032025
+INJ HAITIAN 1850T 23	0.50%	87.31	0.43	032025
+INJ HAITIAN 1850T 24	0.82%	102.35	0.84	032025
+INJ HAITIAN 1850T 25	1.61%	51.08	0.82	032025
+INJ HAITIAN 1850T 26		402.77		032025
+INJ HAITIAN 1850T 27	0.07%	213.79	0.15	032025
+INJ HAITIAN 1850T 29	0.26%	145.75	0.38	032025
+INJ HAITIAN 1850T 30	0.48%	124.56	0.59	032025
+INJ HAITIAN 1850T 31	0.69%	144.78	1.01	032025
+INJ HAITIAN 1850T 32	2.55%	38.58	0.98	032025
+INJ HAITIAN 600 T 09	1.49%	74.11	1.11	032025
+INJ HAITIAN 600 T 10	0.92%	46.39	0.43	032025
+INJ HAITIAN 600T 03	0.76%	58.84	0.45	032025
+INJ HAITIAN 600T 04	2.39%	56.15	1.34	032025
+INJ HAITIAN 600T 05	2.19%	47.59	1.04	032025
+INJ HAITIAN 600T 06	3.01%	36.04	1.09	032025
+INJ HAITIAN 750T 01	0.65%	93.96	0.61	032025
+INJ HAITIAN 750T 02	1.86%	111.9	2.08	032025
+INJ SEMERARO 1000T 14	2.91%	37.43	1.09	032025
+INJ SEMERARO 1300T 15	0.57%	125.02	0.71	032025
+INJ SEMERARO 750T 28	7.19%	13.61	0.98	032025
+INJ ZHAFIR 600T 07	3.03%	50.8	1.54	032025
+INJ ZHAFIR 600T 11	0.52%	96.48	0.5	032025
+INJ ZHAFIR 600T 12	1.79%	37.43	0.67	032025
+INJ ZHAFIR 600T 13	4.40%	33.98	1.49	032025
+LINHA CAVIDADES SARES	11.20%	5.09	0.57	032025
+LN 01 CORTE TRANSVERSAL 101	6.95%	19.8	1.38	032025
+LN 01 ESMALTACAO 164	0.39%	56.7	0.22	032025
+LN 01 ESMALTAÇÃO CAVID 166	0.05%	59.65	0.03	032025
+LN 01 PINT ELETROSTÁTICA 159	0.20%	97.83	0.2	032025
+LN 01 SEMI AUT FAB GAB 153	2.01%	9.67	0.19	032025
+LN 02 CORTE TRANSVERSAL 102	3.63%	18.81	0.68	032025
+LN 02 ESMALTACAO 165	5.73%	81.84	4.69	032025
+LN 02 ESMALTAÇÃO CAVID 167	4.84%	24.8	1.2	032025
+LN 02 SEMI AUT FAB GAB 154	1.42%	25.09	0.36	032025
+LN 03 AUT FAB GAB EUROGAM 156	5.88%	7.74	0.45	032025
+LN 04 AUT GABINETES MED/ALT	5.45%	3.67	0.2	032025
+LN 103 TRANSVERSAL	2.08%	38.65	0.8	032025
+MAQ SOLDA ANEL 33	0.15%	115.87	0.17	032025
+MAQ SOLDA ANEL 34	0.70%	34.61	0.24	032025
+MAQ SOLDA ANEL 36	0.70%	56	0.39	032025
+MAQ SOLDA ANEL 37	0.86%	33.82	0.29	032025
+MAQ SOLDA ANEL 38	1.87%	27.69	0.52	032025
+PRENSA HID 500T - DESS 105	4.79%	12.5	0.6	032025
+PRENSA M GTX250T AUT CFONG 119	2.02%	18.83	0.38	032025
+PRENSA M GTX250T PRG CFONG 117	5.17%	22.26	1.15	032025
+PRENSA M GTX300T - C FONG 113	7.87%	6.07	0.48	032025
+PRENSA M GTX300T - C FONG 116	1.12%	40.87	0.46	032025
+PRENSA M GTX400T - C FONG 107	2.95%	12.06	0.36	032025
+PRENSA M GTX400T - C FONG 108	1.78%	19.15	0.34	032025
+PRENSA M GTX400T AUT CFONG 111	3.38%	9.02	0.3	032025
+PRENSA M GTX400T AUT CFONG 123	2.65%	23.16	0.61	032025
+PRENSA M GTX400T AUT CFONG 151	1.14%	24.95	0.28	032025
+PRENSA MECÂNICA 800 T	6.43%	11.67	0.75	032025
+PRENSA SER S300T - JUNDIAÍ 125	3.47%	10.54	0.37	032025
+PRENSA TOX 127		186.07		032025
+CABINE PINTURA MULTICOLOR	0.91%	32.91	0.3	042025
+CESTO INOX - MIRAMONDI	12.23%	6.97	0.85	042025
+CESTO INOX - TEAS	12.48%	6.44	0.8	042025
+EXTRUSÃO 01	10.60%	16.47	1.75	042025
+EXTRUSÃO 02	10.12%	21.6	2.19	042025
+INJ HAITIAN 1800T 16	1.06%	71.15	0.76	042025
+INJ HAITIAN 1800T 17	7.63%	24.58	1.88	042025
+INJ HAITIAN 1800T 18	0.36%	225.15	0.8	042025
+INJ HAITIAN 1800T 19	0.48%	210.77	1.02	042025
+INJ HAITIAN 1800T 20	6.10%	60.96	3.72	042025
+INJ HAITIAN 1800T 21	0.18%	233.01	0.41	042025
+INJ HAITIAN 1800T 22	0.37%	183.75	0.68	042025
+INJ HAITIAN 1850T 23	0.19%	156.18	0.3	042025
+INJ HAITIAN 1850T 24	3.57%	45.44	1.62	042025
+INJ HAITIAN 1850T 25	5.27%	38.66	2.04	042025
+INJ HAITIAN 1850T 26	0.06%	359.57	0.2	042025
+INJ HAITIAN 1850T 27		328.07		042025
+INJ HAITIAN 1850T 29	1.48%	16.66	0.25	042025
+INJ HAITIAN 1850T 30	0.50%	103.61	0.51	042025
+INJ HAITIAN 1850T 31	2.43%	69.53	1.69	042025
+INJ HAITIAN 1850T 32	2.74%	28.99	0.79	042025
+INJ HAITIAN 600 T 09	0.03%	312.58	0.09	042025
+INJ HAITIAN 600 T 10	2.71%	26.29	0.71	042025
+INJ HAITIAN 600T 03	1.00%	56.46	0.56	042025
+INJ HAITIAN 600T 04	2.12%	40.72	0.86	042025
+INJ HAITIAN 600T 05	0.40%	73.07	0.29	042025
+INJ HAITIAN 600T 06	0.27%	105.25	0.29	042025
+INJ HAITIAN 750T 01	2.36%	29.53	0.7	042025
+INJ HAITIAN 750T 02	2.23%	86.35	1.93	042025
+INJ SEMERARO 1000T 14		253.76		042025
+INJ SEMERARO 1300T 15	0.38%	121.1	0.46	042025
+INJ SEMERARO 750T 28	4.93%	31.73	1.57	042025
+INJ ZHAFIR 600T 07	4.44%	22.48	1	042025
+INJ ZHAFIR 600T 11	1.16%	59.78	0.69	042025
+INJ ZHAFIR 600T 12	8.37%	25.89	2.17	042025
+INJ ZHAFIR 600T 13	1.23%	57.7	0.71	042025
+LINHA CAVIDADES SARES	6.15%	3.18	0.2	042025
+LN 01 CORTE TRANSVERSAL 101	0.39%	40.97	0.16	042025
+LN 01 ESMALTACAO 164	0.39%	81.95	0.32	042025
+LN 01 ESMALTAÇÃO CAVID 166	0.34%	45.35	0.16	042025
+LN 01 PINT ELETROSTÁTICA 159	0.97%	21.55	0.21	042025
+LN 01 SEMI AUT FAB GAB 153	1.52%	18.79	0.29	042025
+LN 02 CORTE TRANSVERSAL 102	1.34%	63.86	0.85	042025
+LN 02 ESMALTACAO 165	0.36%	88.57	0.32	042025
+LN 02 ESMALTAÇÃO CAVID 167	2.97%	26.22	0.78	042025
+LN 02 SEMI AUT FAB GAB 154	2.18%	15.3	0.33	042025
+LN 03 AUT FAB GAB EUROGAM 156	7.71%	4.86	0.37	042025
+LN 04 AUT GABINETES MED/ALT	4.51%	6.52	0.29	042025
+LN 103 TRANSVERSAL	1.28%	25.74	0.33	042025
+MAQ SOLDA ANEL 33	1.38%	49.26	0.68	042025
+MAQ SOLDA ANEL 34	3.90%	40.69	1.59	042025
+MAQ SOLDA ANEL 36	1.31%	86.91	1.14	042025
+MAQ SOLDA ANEL 37	1.85%	18.89	0.35	042025
+MAQ SOLDA ANEL 38	1.26%	102.55	1.29	042025
+PRENSA HID 500T - DESS 105	3.83%	21.35	0.82	042025
+PRENSA M GTX250T AUT CFONG 119	5.61%	12.51	0.7	042025
+PRENSA M GTX250T PRG CFONG 117	0.84%	34.89	0.29	042025
+PRENSA M GTX300T - C FONG 113	5.45%	13.28	0.72	042025
+PRENSA M GTX300T - C FONG 116	0.56%	30.11	0.17	042025
+PRENSA M GTX400T - C FONG 107	1.85%	61.13	1.13	042025
+PRENSA M GTX400T - C FONG 108	1.65%	63.78	1.05	042025
+PRENSA M GTX400T AUT CFONG 111	6.16%	5.67	0.35	042025
+PRENSA M GTX400T AUT CFONG 123	1.61%	20.74	0.33	042025
+PRENSA M GTX400T AUT CFONG 151	2.60%	17.95	0.47	042025
+PRENSA MECÂNICA 800 T	5.37%	11.05	0.59	042025
+PRENSA SER S300T - JUNDIAÍ 125	0.93%	39.76	0.37	042025
+PRENSA TOX 127	0.22%	27.23	0.06	042025
+CABINE PINTURA MULTICOLOR	0.49%	68.57	0.33	052025
+CESTO INOX - MIRAMONDI	7.27%	9.17	0.67	052025
+CESTO INOX - TEAS	7.27%	8.46	0.62	052025
+EXTRUSÃO 01	5.23%	20.66	1.08	052025
+EXTRUSÃO 02	9.62%	14.83	1.43	052025
+INJ HAITIAN 1800T 16		622.02		052025
+INJ HAITIAN 1800T 17	1.61%	52.59	0.85	052025
+INJ HAITIAN 1800T 18	0.07%	209.05	0.15	052025
+INJ HAITIAN 1800T 19	0.99%	86.04	0.86	052025
+INJ HAITIAN 1800T 20	0.42%	89.17	0.38	052025
+INJ HAITIAN 1800T 21	0.61%	126.89	0.77	052025
+INJ HAITIAN 1800T 22	0.06%	308.33	0.2	052025
+INJ HAITIAN 1850T 23	0.95%	193.13	1.84	052025
+INJ HAITIAN 1850T 24	2.37%	49.24	1.17	052025
+INJ HAITIAN 1850T 25	0.86%	135.94	1.18	052025
+INJ HAITIAN 1850T 26	0.04%	564.21	0.2	052025
+INJ HAITIAN 1850T 27	0.60%	288.15	1.72	052025
+INJ HAITIAN 1850T 29	0.75%	48.22	0.36	052025
+INJ HAITIAN 1850T 30	0.27%	64.96	0.18	052025
+INJ HAITIAN 1850T 31	1.79%	36.07	0.64	052025
+INJ HAITIAN 1850T 32	2.06%	11.82	0.24	052025
+INJ HAITIAN 600 T 09	0.23%	216.07	0.51	052025
+INJ HAITIAN 600 T 10	1.09%	44.3	0.48	052025
+INJ HAITIAN 600T 03	0.27%	132.53	0.36	052025
+INJ HAITIAN 600T 04	1.41%	39.54	0.56	052025
+INJ HAITIAN 600T 05	0.69%	105.94	0.73	052025
+INJ HAITIAN 600T 06	1.91%	31.42	0.6	052025
+INJ HAITIAN 750T 01	0.85%	227.77	1.94	052025
+INJ HAITIAN 750T 02	1.12%	204.71	2.3	052025
+INJ SEMERARO 1000T 14	1.63%	61.14	1	052025
+INJ SEMERARO 1300T 15	0.55%	149.37	0.82	052025
+INJ SEMERARO 750T 28	2.29%	37.98	0.87	052025
+INJ ZHAFIR 600T 07	1.67%	48.6	0.81	052025
+INJ ZHAFIR 600T 11	0.77%	31.63	0.24	052025
+INJ ZHAFIR 600T 12	1.42%	34.35	0.49	052025
+INJ ZHAFIR 600T 13	28.33%	26.81	7.6	052025
+LINHA CAVIDADES SARES	3.32%	12.53	0.42	052025
+LN 01 CORTE TRANSVERSAL 101	2.93%	23.76	0.7	052025
+LN 01 ESMALTACAO 164	0.01%	215.53	0.01	052025
+LN 01 ESMALTAÇÃO CAVID 166	1.15%	100.59	1.15	052025
+LN 01 PINT ELETROSTÁTICA 159	2.43%	143.45	3.48	052025
+LN 01 SEMI AUT FAB GAB 153	1.90%	16.62	0.32	052025
+LN 02 CORTE TRANSVERSAL 102	1.16%	26.48	0.31	052025
+LN 02 ESMALTACAO 165	0.16%	89.98	0.15	052025
+LN 02 ESMALTAÇÃO CAVID 167	0.05%	224	0.12	052025
+LN 02 SEMI AUT FAB GAB 154	1.71%	13.44	0.23	052025
+LN 03 AUT FAB GAB EUROGAM 156	4.41%	15.38	0.68	052025
+LN 04 AUT GABINETES MED/ALT	2.15%	14.39	0.31	052025
+LN 103 TRANSVERSAL	0.31%	205.73	0.65	052025
+MAQ SOLDA ANEL 33	0.44%	137.62	0.61	052025
+MAQ SOLDA ANEL 34	0.99%	61.96	0.61	052025
+MAQ SOLDA ANEL 36	1.59%	40.77	0.65	052025
+MAQ SOLDA ANEL 37	0.51%	102.17	0.52	052025
+MAQ SOLDA ANEL 38	0.41%	268.15	1.11	052025
+PRENSA HID 500T - DESS 105	4.10%	15.19	0.62	052025
+PRENSA M GTX250T AUT CFONG 119	17.51%	6.72	1.18	052025
+PRENSA M GTX250T PRG CFONG 117	3.44%	25.35	0.87	052025
+PRENSA M GTX300T - C FONG 113	13.20%	5.28	0.7	052025
+PRENSA M GTX300T - C FONG 116	3.92%	22.34	0.88	052025
+PRENSA M GTX400T - C FONG 107	1.19%	40.56	0.48	052025
+PRENSA M GTX400T - C FONG 108	1.15%	33.43	0.38	052025
+PRENSA M GTX400T AUT CFONG 111	4.10%	14.47	0.59	052025
+PRENSA M GTX400T AUT CFONG 123	2.11%	16.01	0.34	052025
+PRENSA M GTX400T AUT CFONG 151	2.91%	9.63	0.28	052025
+PRENSA MECÂNICA 800 T	2.99%	19.92	0.59	052025
+PRENSA SER S300T - JUNDIAÍ 125	1.34%	32.94	0.44	052025
+PRENSA TOX 127		232.27		052025
+CABINE PINTURA MULTICOLOR	0.13%	182.75	0.23	062025
+CESTO INOX - MIRAMONDI	5.21%	12.2	0.64	062025
+CESTO INOX - TEAS	3.58%	16.89	0.6	062025
+EXTRUSÃO 01	1.74%	54.79	0.96	062025
+EXTRUSÃO 02	2.04%	32.16	0.66	062025
+INJ HAITIAN 1800T 16	0.24%	224.15	0.55	062025
+INJ HAITIAN 1800T 17	2.76%	73.9	2.04	062025
+INJ HAITIAN 1800T 18		612.55		062025
+INJ HAITIAN 1800T 19	0.33%	194.5	0.63	062025
+INJ HAITIAN 1800T 20	0.23%	87.42	0.2	062025
+INJ HAITIAN 1800T 21	0.19%	187.76	0.35	062025
+INJ HAITIAN 1800T 22	0.10%	673.1	0.68	062025
+INJ HAITIAN 1850T 23	1.85%	63.47	1.17	062025
+INJ HAITIAN 1850T 24	0.37%	119.36	0.44	062025
+INJ HAITIAN 1850T 25	0.99%	60.33	0.6	062025
+INJ HAITIAN 1850T 26	0.43%	108.65	0.47	062025
+INJ HAITIAN 1850T 27	0.48%	136.43	0.65	062025
+INJ HAITIAN 1850T 29	0.41%	83.48	0.34	062025
+INJ HAITIAN 1850T 30	0.74%	143.82	1.06	062025
+INJ HAITIAN 1850T 31	2.12%	33.13	0.7	062025
+INJ HAITIAN 1850T 32	2.42%	25.2	0.61	062025
+INJ HAITIAN 600 T 09	0.23%	90.26	0.21	062025
+INJ HAITIAN 600 T 10	0.34%	127.89	0.43	062025
+INJ HAITIAN 600T 03	0.11%	378	0.42	062025
+INJ HAITIAN 600T 04	0.56%	83.28	0.47	062025
+INJ HAITIAN 600T 05	0.75%	72.87	0.55	062025
+INJ HAITIAN 600T 06	0.44%	50.43	0.22	062025
+INJ HAITIAN 750T 01	1.04%	143.74	1.49	062025
+INJ HAITIAN 750T 02	0.46%	179.8	0.82	062025
+INJ SEMERARO 1000T 14	0.83%	55.14	0.46	062025
+INJ SEMERARO 1300T 15	1.04%	305.32	3.18	062025
+INJ SEMERARO 750T 28	1.50%	35.39	0.53	062025
+INJ ZHAFIR 600T 07	1.89%	48.42	0.91	062025
+INJ ZHAFIR 600T 11	0.86%	103.28	0.88	062025
+INJ ZHAFIR 600T 12	0.13%	148.58	0.19	062025
+INJ ZHAFIR 600T 13	1.21%	76.66	0.93	062025
+LINHA CAVIDADES SARES	3.25%	15.72	0.51	062025
+LN 01 CORTE TRANSVERSAL 101	1.39%	63.13	0.88	062025
+LN 01 ESMALTACAO 164	0.60%	116.77	0.7	062025
+LN 01 ESMALTAÇÃO CAVID 166	0.43%	77.79	0.33	062025
+LN 01 PINT ELETROSTÁTICA 159		485.12		062025
+LN 01 SEMI AUT FAB GAB 153	3.34%	11.35	0.38	062025
+LN 02 CORTE TRANSVERSAL 102	0.79%	37.63	0.3	062025
+LN 02 ESMALTACAO 165	0.18%	182.23	0.34	062025
+LN 02 ESMALTAÇÃO CAVID 167	0.67%	96.96	0.65	062025
+LN 02 SEMI AUT FAB GAB 154	4.48%	13.28	0.6	062025
+LN 03 AUT FAB GAB EUROGAM 156	5.72%	8.81	0.5	062025
+LN 04 AUT GABINETES MED/ALT	2.55%	14.24	0.36	062025
+LN 103 TRANSVERSAL	2.78%	32.51	0.9	062025
+MAQ SOLDA ANEL 33	0.37%	93.69	0.34	062025
+MAQ SOLDA ANEL 34	0.85%	52.05	0.44	062025
+MAQ SOLDA ANEL 36	1.01%	179.55	1.82	062025
+MAQ SOLDA ANEL 37	0.13%	132.9	0.17	062025
+MAQ SOLDA ANEL 38	1.81%	27.51	0.5	062025
+PRENSA HID 500T - DESS 105	1.26%	13.75	0.17	062025
+PRENSA M GTX250T AUT CFONG 119	2.92%	7.58	0.22	062025
+PRENSA M GTX250T PRG CFONG 117	0.24%	99.33	0.24	062025
+PRENSA M GTX300T - C FONG 113	5.55%	8.33	0.46	062025
+PRENSA M GTX300T - C FONG 116	1.98%	12.73	0.25	062025
+PRENSA M GTX400T - C FONG 107	0.95%	73.99	0.7	062025
+PRENSA M GTX400T - C FONG 108	0.67%	32.24	0.22	062025
+PRENSA M GTX400T AUT CFONG 111	2.24%	10.93	0.24	062025
+PRENSA M GTX400T AUT CFONG 123	1.60%	20.57	0.33	062025
+PRENSA M GTX400T AUT CFONG 151	1.92%	11.8	0.23	062025
+PRENSA MECÂNICA 800 T	2.18%	18.09	0.39	062025
+PRENSA SER S300T - JUNDIAÍ 125	1.14%	40.04	0.46	062025
+PRENSA TOX 127	0.77%	40.38	0.31	062025
+CABINE PINTURA MULTICOLOR	1.42%	24.79	0.35	072025
+CESTO INOX - MIRAMONDI	3.27%	14.62	0.48	072025
+CESTO INOX - TEAS	9.44%	4.8	0.45	072025
+EXTRUSÃO 01	8.98%	12.63	1.13	072025
+EXTRUSÃO 02	5.48%	16.98	0.93	072025
+INJ HAITIAN 1800T 16	0.07%	536.77	0.37	072025
+INJ HAITIAN 1800T 17	0.98%	96.09	0.94	072025
+INJ HAITIAN 1800T 18	1.38%	129.38	1.78	072025
+INJ HAITIAN 1800T 19	0.05%	239.67	0.11	072025
+INJ HAITIAN 1800T 20	0.18%	104.54	0.19	072025
+INJ HAITIAN 1800T 21	0.60%	130.12	0.78	072025
+INJ HAITIAN 1800T 22	3.79%	28.29	1.07	072025
+INJ HAITIAN 1850T 23	2.47%	35.24	0.87	072025
+INJ HAITIAN 1850T 24	3.64%	27.46	1	072025
+INJ HAITIAN 1850T 25	1.49%	47.12	0.7	072025
+INJ HAITIAN 1850T 26	0.10%	224.55	0.22	072025
+INJ HAITIAN 1850T 27	3.34%	41.84	1.4	072025
+INJ HAITIAN 1850T 29	1.20%	86.91	1.04	072025
+INJ HAITIAN 1850T 30	0.79%	138.3	1.09	072025
+INJ HAITIAN 1850T 31	2.40%	47.37	1.14	072025
+INJ HAITIAN 1850T 32	0.45%	97.76	0.44	072025
+INJ HAITIAN 600 T 09	0.08%	498.46	0.39	072025
+INJ HAITIAN 600 T 10	6.09%	61.03	3.72	072025
+INJ HAITIAN 600T 03	0.76%	59.92	0.46	072025
+INJ HAITIAN 600T 04	0.44%	119.29	0.53	072025
+INJ HAITIAN 600T 05	0.88%	68.14	0.6	072025
+INJ HAITIAN 600T 06	0.10%	140.38	0.14	072025
+INJ HAITIAN 750T 01	0.41%	293.22	1.19	072025
+INJ HAITIAN 750T 02	0.35%	102.07	0.36	072025
+INJ SEMERARO 1000T 14	1.44%	37.7	0.54	072025
+INJ SEMERARO 1300T 15		435.38		072025
+INJ SEMERARO 750T 28	1.35%	51.12	0.69	072025
+INJ ZHAFIR 600T 07	0.86%	82.76	0.71	072025
+INJ ZHAFIR 600T 11	3.27%	27.8	0.91	072025
+INJ ZHAFIR 600T 12	3.25%	30.28	0.98	072025
+INJ ZHAFIR 600T 13	0.04%	53.33	0.02	072025
+LINHA CAVIDADES SARES	6.50%	6.3	0.41	072025
+LN 01 CORTE TRANSVERSAL 101	16.65%	16.56	2.76	072025
+LN 01 ESMALTACAO 164	2.45%	38.01	0.93	072025
+LN 01 ESMALTAÇÃO CAVID 166	0.15%	83.2	0.13	072025
+LN 01 PINT ELETROSTÁTICA 159	0.32%	39.57	0.12	072025
+LN 01 SEMI AUT FAB GAB 153	6.65%	5.02	0.33	072025
+LN 02 CORTE TRANSVERSAL 102	0.15%	48.37	0.07	072025
+LN 02 ESMALTACAO 165	2.66%	19.6	0.52	072025
+LN 02 ESMALTAÇÃO CAVID 167	1.84%	34.53	0.64	072025
+LN 02 SEMI AUT FAB GAB 154	3.60%	11.58	0.42	072025
+LN 03 AUT FAB GAB EUROGAM 156	3.26%	10.31	0.34	072025
+LN 04 AUT GABINETES MED/ALT	4.59%	6.41	0.29	072025
+LN 103 TRANSVERSAL	0.64%	118.11	0.76	072025
+MAQ SOLDA ANEL 33	0.42%	62.98	0.27	072025
+MAQ SOLDA ANEL 34	0.65%	36.78	0.24	072025
+MAQ SOLDA ANEL 36	0.86%	161.44	1.39	072025
+MAQ SOLDA ANEL 37	0.76%	41.28	0.32	072025
+MAQ SOLDA ANEL 38	1.90%	65.6	1.25	072025
+PRENSA HID 500T - DESS 105	4.18%	11.35	0.47	072025
+PRENSA M GTX250T AUT CFONG 119	3.57%	11.24	0.4	072025
+PRENSA M GTX250T PRG CFONG 117	0.17%	31.65	0.05	072025
+PRENSA M GTX300T - C FONG 113	11.86%	9.57	1.14	072025
+PRENSA M GTX300T - C FONG 116	1.17%	29.01	0.34	072025
+PRENSA M GTX400T - C FONG 107	4.73%	17.44	0.83	072025
+PRENSA M GTX400T - C FONG 108	0.62%	32.71	0.2	072025
+PRENSA M GTX400T AUT CFONG 111	0.88%	58.04	0.51	072025
+PRENSA M GTX400T AUT CFONG 123	2.75%	7.38	0.2	072025
+PRENSA M GTX400T AUT CFONG 151	1.00%	16.4	0.16	072025
+PRENSA MECÂNICA 800 T	5.70%	10.15	0.58	072025
+PRENSA SER S300T - JUNDIAÍ 125	1.79%	17.61	0.31	072025
+PRENSA TOX 127	0.05%	205.24	0.11	072025
+CABINE PINTURA MULTICOLOR	0.15%	360.31	0.54	082025
+CESTO INOX - MIRAMONDI	7.07%	9.45	0.67	082025
+CESTO INOX - TEAS	4.88%	9.13	0.45	082025
+EXTRUSÃO 01	2.96%	110.54	3.27	082025
+EXTRUSÃO 02	4.60%	91	4.19	082025
+INJ HAITIAN 1800T 16	2.20%	673.94	Infinity	082025
+INJ HAITIAN 1800T 17	2.13%	131.9	2.81	082025
+INJ HAITIAN 1800T 18	1.64%	97.15	1.6	082025
+INJ HAITIAN 1800T 19	0.95%	548.67	5.24	082025
+INJ HAITIAN 1800T 20	2.88%	202.28	5.83	082025
+INJ HAITIAN 1800T 21	0.31%	585.2	1.81	082025
+INJ HAITIAN 1800T 22	0.26%	190.51	0.49	082025
+INJ HAITIAN 1850T 23	1.73%	61.39	1.06	082025
+INJ HAITIAN 1850T 24	5.96%	79.91	4.76	082025
+INJ HAITIAN 1850T 25	4.20%	71.07	2.99	082025
+INJ HAITIAN 1850T 26	0.25%	72.98	0.18	082025
+INJ HAITIAN 1850T 27	1.01%	33.93	0.34	082025
+INJ HAITIAN 1850T 29	0.94%	98.28	0.93	082025
+INJ HAITIAN 1850T 30	0.39%	306.95	1.21	082025
+INJ HAITIAN 1850T 31	3.44%	11.9	0.41	082025
+INJ HAITIAN 1850T 32	0.59%	197.71	1.16	082025
+INJ HAITIAN 600 T 09	0.14%	330.76	0.48	082025
+INJ HAITIAN 600 T 10	0.36%	346.4	1.26	082025
+INJ HAITIAN 600T 03	0.51%	150.03	0.77	082025
+INJ HAITIAN 600T 04	0.32%	184.88	0.59	082025
+INJ HAITIAN 600T 05	0.26%	164.58	0.43	082025
+INJ HAITIAN 600T 06	0.18%	301.62	0.54	082025
+INJ HAITIAN 750T 01	0.05%	628.09	Infinity	082025
+INJ HAITIAN 750T 02	0.94%	143.62	1.35	082025
+INJ SEMERARO 1000T 14	2.07%	79.71	1.65	082025
+INJ SEMERARO 1300T 15	2.12%	73.99	1.57	082025
+INJ SEMERARO 750T 28	1.47%	98.82	1.45	082025
+INJ ZHAFIR 600T 07	0.55%	325.42	1.79	082025
+INJ ZHAFIR 600T 11	1.12%	161.01	1.8	082025
+INJ ZHAFIR 600T 12	1.82%	165.19	3.01	082025
+INJ ZHAFIR 600T 13	2.32%	84.13	1.95	082025
+LINHA CAVIDADES SARES	4.58%	19.94	0.91	082025
+LN 01 CORTE TRANSVERSAL 101	1.91%	23.75	0.45	082025
+LN 01 ESMALTACAO 164	0.22%	176.98	Infinity	082025
+LN 01 ESMALTAÇÃO CAVID 166	0.34%	94.79	0.32	082025
+LN 01 PINT ELETROSTÁTICA 159	0.13%	402.83	Infinity	082025
+LN 01 SEMI AUT FAB GAB 153	4.69%	24.25	1.14	082025
+LN 02 CORTE TRANSVERSAL 102	0.11%	186.68	0.2	082025
+LN 02 ESMALTACAO 165	0.19%	171.27	Infinity	082025
+LN 02 ESMALTAÇÃO CAVID 167	0.95%	42.92	0.41	082025
+LN 02 SEMI AUT FAB GAB 154	1.64%	22.83	0.37	082025
+LN 03 AUT FAB GAB EUROGAM 156	8.47%	38.79	3.29	082025
+LN 04 AUT GABINETES MED/ALT	4.32%	20.15	0.87	082025
+LN 103 TRANSVERSAL	0.58%	169.22	0.99	082025
+MAQ SOLDA ANEL 33	1.59%	62.54	0.99	082025
+MAQ SOLDA ANEL 34	0.87%	128.19	1.12	082025
+MAQ SOLDA ANEL 36	0.31%	576.07	1.77	082025
+MAQ SOLDA ANEL 37	0.25%	176.28	Infinity	082025
+MAQ SOLDA ANEL 38	0.94%	209.29	1.97	082025
+PRENSA HID 500T - DESS 105	2.88%	21.76	0.63	082025
+PRENSA M GTX250T AUT CFONG 119	1.02%	62.59	0.64	082025
+PRENSA M GTX250T PRG CFONG 117	3.15%	29.13	0.92	082025
+PRENSA M GTX300T - C FONG 113	5.18%	10.15	0.53	082025
+PRENSA M GTX300T - C FONG 116	2.87%	28.38	0.81	082025
+PRENSA M GTX400T - C FONG 107	3.04%	97.81	2.98	082025
+PRENSA M GTX400T - C FONG 108	2.63%	73.05	1.92	082025
+PRENSA M GTX400T AUT CFONG 111	5.86%	17.91	1.05	082025
+PRENSA M GTX400T AUT CFONG 123	1.08%	44.44	0.48	082025
+PRENSA M GTX400T AUT CFONG 151	1.20%	36.81	0.44	082025
+PRENSA MECÂNICA 800 T	4.77%	32.64	1.56	082025
+PRENSA SER S300T - JUNDIAÍ 125	1.66%	49.22	0.82	082025
+PRENSA TOX 127	0.17%	222.71	0.39	082025`;
+
+            const performanceData = {};
+
+            const parsePerformanceData = () => {
+                const lines = realPerformanceData.trim().split('\n').slice(1);
+                const dataByAssetNumber = {};
+
+                const getAssetNumberFromName = (name) => {
+                    const match = name.match(/(\d+)(?!.*\d)\s*$/);
+                    return match ? match[1] : null;
+                };
+
+                const assetNameMap = {
+                    'EXTRUSÃO 01': 'L1',
+                    'EXTRUSÃO 02': 'L2',
+                    'CESTO INOX - TEAS': 'TEAS',
+                    'CESTO INOX - MIRAMONDI': 'MIRAMONDI'
+                };
+
+                lines.forEach(line => {
+                    const columns = line.split('\t');
+                    const rawAssetName = columns[0].trim();
+                    let bdr = columns[1] ? parseFloat(columns[1].replace('%', '').replace(',', '.')) : 0;
+                    let mtbf = columns[2] ? parseFloat(columns[2].replace(',', '.')) : 0;
+                    let mttr = columns[3] ? (columns[3].trim().toLowerCase() === 'infinity' ? 0 : parseFloat(columns[3].replace(',', '.'))) : 0;
+                    const monthYear = columns[4].trim();
+
+                    if (isNaN(bdr)) bdr = 0;
+                    if (isNaN(mtbf)) mtbf = 0;
+                    if (isNaN(mttr)) mttr = 0;
+
+                    let assetId = assetNameMap[rawAssetName] || getAssetNumberFromName(rawAssetName) || rawAssetName;
+
+                    const month = parseInt(monthYear.substring(0, 2), 10);
+                    const year = parseInt(monthYear.substring(2), 10);
+                    const date = new Date(Date.UTC(year, month - 1, 1));
+                    
+                    const availability = (mtbf > 0 || mttr > 0) ? (mtbf / (mtbf + mttr)) * 100 : 100;
+
+                    if (!dataByAssetNumber[assetId]) {
+                        dataByAssetNumber[assetId] = [];
+                    }
+                    dataByAssetNumber[assetId].push({
+                        date: date.getTime(),
+                        bdr: bdr,
+                        mtbf: mtbf,
+                        mttr: mttr,
+                        availability: availability
+                    });
+                });
+
+                // Sort data by date for each asset
+                for (const key in dataByAssetNumber) {
+                    dataByAssetNumber[key].sort((a, b) => a.date - b.date);
+                }
+                return dataByAssetNumber;
+            };
+
+            const performanceDataParsed = parsePerformanceData();
+
+            // --- State Variables ---
+            let isComparisonMode = false;
+            let comparisonList = [];
+            let currentComparisonFamily = null;
+            const BRL_TO_SEK_RATE = 1.95; // Exchange rate
+
+            // --- DOM Elements ---
+            const categoryFilter = document.getElementById('category-filter');
+            const factoryMapContainer = document.getElementById('factory-map-container');
+            const assetCountEl = document.getElementById('asset-count');
+            const totalValueEl = document.getElementById('total-value');
+            const depreciatedValueEl = document.getElementById('depreciated-value');
+            const remainingValueEl = document.getElementById('remaining-value');
+            const totalValueSekEl = document.getElementById('total-value-sek');
+            const depreciatedValueSekEl = document.getElementById('depreciated-value-sek');
+            const remainingValueSekEl = document.getElementById('remaining-value-sek');
+
+            const modal = document.getElementById('asset-modal');
+            const modalContentEl = document.getElementById('modal-content');
+            const modalTitleEl = document.getElementById('modal-title');
+            const modalCloseBtn = document.getElementById('modal-close-btn');
+            
+            const comparisonModal = document.getElementById('comparison-modal');
+            const comparisonModalContentEl = document.getElementById('comparison-modal-content');
+            const comparisonModalCloseBtn = document.getElementById('comparison-modal-close-btn');
+
+            const comparisonToggle = document.getElementById('comparison-toggle');
+            const compareBtn = document.getElementById('compare-btn');
+            
+            // --- Formatters and Helpers ---
+            const brlCurrencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+            const sekCurrencyFormatter = new Intl.NumberFormat('sv-SE', { style: 'currency', currency: 'SEK' });
+            const today = new Date();
+            const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+            const parseDate = (dateString) => {
+                if (!dateString || typeof dateString !== 'string') return null;
+                if (dateString.includes('/')) {
+                    const parts = dateString.split('/');
+                    if (parts.length === 3) {
+                        const [day, month, year] = parts.map(p => parseInt(p, 10));
+                        return !isNaN(day) && !isNaN(month) && !isNaN(year) ? new Date(Date.UTC(year, month - 1, day)) : null;
+                    }
+                }
+                if (dateString.includes('-')) {
+                    const parts = dateString.split('-');
+                     if (parts.length === 3) {
+                        const [year, month, day] = parts.map(p => parseInt(p, 10));
+                        return !isNaN(day) && !isNaN(month) && !isNaN(year) ? new Date(Date.UTC(year, month - 1, day)) : null;
+                    }
+                }
+                return null;
+            };
+
+            const getAssetFamily = (asset) => {
+                const name = (asset.displayName || '').toUpperCase();
+                if (name.startsWith('INJETORA')) return 'Injetora';
+                if (name.startsWith('PRENSA')) return 'Prensa';
+                if (name.includes('ROBO') || name.includes('ROBÔ')) return 'Robô';
+                if (name.startsWith('EXTRUSORA')) return 'Extrusora';
+                if (name.startsWith('SOLDA ANEL')) return 'Solda Anel';
+                return asset.category; // Fallback
+            };
+            
+            // --- Data Processing ---
+            assetData.forEach((asset, index) => {
+                asset.id = index; // Assign a unique ID
+                const originalNameUpper = asset.ativo.toUpperCase();
+                if (originalNameUpper.includes('SOLDA ANEL')) asset.area = 'PRÉDIO DE SOLDA ANEL';
+                else if (originalNameUpper.includes('CELULA DE COLAGEM')) asset.area = 'ROBÔS - CÉLULAS DE COLAGEM';
+                if (asset.category === 'Robots' && (asset.area === 'PRESS SHOP' || asset.area === 'CABINET LINE')) asset.area = 'ÁREA DE ROBÔS (Prensas & Cabinet)';
+                
+                if (originalNameUpper.includes('INJETORA') || originalNameUpper.includes('PRENSA') || originalNameUpper.includes('SOLDA ANEL')) {
+                    let baseName = '';
+                    if (originalNameUpper.includes('INJETORA')) baseName = 'Injetora';
+                    else if (originalNameUpper.includes('PRENSA')) baseName = 'Prensa';
+                    else if (originalNameUpper.includes('SOLDA ANEL')) baseName = 'Solda Anel';
+                    const numberMatch = asset.ativo.match(/(\d+)(?!.*\d)/);
+                    const number = numberMatch ? numberMatch[0] : '';
+                    asset.displayName = `${baseName} ${number}`.trim();
+                    if (originalNameUpper.includes('INJETORA')) {
+                        const numStr = number.padStart(2, '0');
+                        if (canhaoData[numStr]) asset.canhaoInfo = canhaoData[numStr];
+                        if (ponteiraData[numStr]) asset.ponteiraInfo = ponteiraData[numStr];
+                        if (cilindroData[numStr]) asset.cilindroInfo = cilindroData[numStr];
+                    }
+                } else if (originalNameUpper.includes('EXTRUSORA L1')) {
+                    asset.displayName = 'Extrusora L1';
+                    asset.extrusoraInfo = extrusoraData['L1'];
+                } else if (originalNameUpper.includes('EXTRUSORA L2')) {
+                    asset.displayName = 'Extrusora L2';
+                    asset.extrusoraInfo = extrusoraData['L2'];
+                } else {
+                    asset.displayName = asset.ativo;
+                }
+            });
+            
+            // --- Core Functions ---
+            const setupFilters = () => {
+                const categories = [...new Set(assetData.map(asset => asset.category))];
+                categories.sort().forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category;
+                    option.textContent = category;
+                    categoryFilter.appendChild(option);
+                });
+            };
+
+            const updateKPIs = (data) => {
+                const totalValue = data.reduce((s, a) => s + a.valorTotal, 0);
+                const depreciatedValue = data.reduce((s, a) => s + a.valorDepreciado, 0);
+                const remainingValue = data.reduce((s, a) => s + a.saldoParaDepreciar, 0);
+
+                totalValueEl.textContent = brlCurrencyFormatter.format(totalValue);
+                depreciatedValueEl.textContent = brlCurrencyFormatter.format(depreciatedValue);
+                remainingValueEl.textContent = brlCurrencyFormatter.format(remainingValue);
+
+                totalValueSekEl.textContent = sekCurrencyFormatter.format(totalValue * BRL_TO_SEK_RATE);
+                depreciatedValueSekEl.textContent = sekCurrencyFormatter.format(depreciatedValue * BRL_TO_SEK_RATE);
+                remainingValueSekEl.textContent = sekCurrencyFormatter.format(remainingValue * BRL_TO_SEK_RATE);
+                
+                assetCountEl.textContent = data.length;
+            };
+
+            const getAssetStatusByAge = (asset) => {
+                const startDate = parseDate(asset.inicioDepreciacao);
+                if (!startDate) return { percent: 0, colorClass: 'status-unknown' };
+                const ageInYears = (todayUTC - startDate) / (31557600000); // ms in a year
+                const p = asset.vidaUtil > 0 ? (ageInYears / asset.vidaUtil) * 100 : 0;
+                let colorClass = 'status-obsolete';
+                if (p <= 80) colorClass = 'status-healthy';
+                else if (p <= 100) colorClass = 'status-attention';
+                else if (p <= 120) colorClass = 'status-critical';
+                return { percent: p, colorClass: colorClass };
+            };
+
+            const hasAlterations = (asset) => {
+                if (asset.canhaoInfo) {
+                    const status = asset.canhaoInfo.status || '';
+                    if (status && status !== 'N/A' && !status.includes('Original de fábrica')) {
+                        return true;
+                    }
+                }
+                if (asset.ponteiraInfo) {
+                    return true;
+                }
+                if (asset.cilindroInfo) {
+                    return true;
+                }
+                if (asset.extrusoraInfo) {
+                    return true;
+                }
+                return false;
+            };
+
+            const renderAssets = (data) => {
+                factoryMapContainer.innerHTML = '';
+                if (data.length === 0) {
+                    factoryMapContainer.innerHTML = `<p style='text-align: center; color: var(--text-secondary);'>Nenhum ativo encontrado.</p>`;
+                    return;
+                }
+                const assetsByArea = data.reduce((acc, asset) => {
+                    const area = asset.area || 'Não especificado';
+                    (acc[area] = acc[area] || []).push(asset);
+                    return acc;
+                }, {});
+                const mapGrid = document.createElement('div');
+                mapGrid.id = 'factory-map-grid';
+                Object.keys(assetsByArea).sort().forEach(areaName => {
+                    const areaWrapper = document.createElement('div');
+                    areaWrapper.className = 'area-wrapper';
+                    const areaTitle = document.createElement('h3');
+                    areaTitle.textContent = `${areaName} (${assetsByArea[areaName].length} ativos)`;
+                    areaWrapper.appendChild(areaTitle);
+                    
+                    const assetsContainer = document.createElement('div');
+                    assetsContainer.className = 'assets-grid';
+
+                    assetsByArea[areaName].forEach(asset => {
+                        const status = getAssetStatusByAge(asset);
+                        const assetBlock = document.createElement('div');
+                        assetBlock.className = `asset-block ${status.colorClass}`;
+                        assetBlock.dataset.assetId = asset.id;
+
+                        let contentHtml = '';
+                        const originalNameUpper = asset.ativo.toUpperCase();
+                       
+                            if (
+                                originalNameUpper.includes('INJETORA') ||
+                                originalNameUpper.includes('PRENSA') ||
+                                originalNameUpper.includes('SOLDA ANEL') ||
+                                originalNameUpper.includes('CESTO INOX')
+                            ) {
+                                const numberMatch = asset.ativo.match(/(\d+)(?!.*\d)/);
+                                if (numberMatch) contentHtml += `<span class='asset-number'>${numberMatch[0]}</span>`;
+                            }
+                        if (hasAlterations(asset)) {
+                            contentHtml += `<span class='asset-star'>&#9733;</span>`;
+                        }
+                        contentHtml += `<div class='tooltip'><strong>${asset.displayName}</strong></div>`;
+                        assetBlock.innerHTML = contentHtml;
+                        
+                        assetBlock.addEventListener('click', () => handleAssetClick(asset, assetBlock));
+                        assetsContainer.appendChild(assetBlock);
+                    });
+                    areaWrapper.appendChild(assetsContainer);
+                    mapGrid.appendChild(areaWrapper);
+                });
+                factoryMapContainer.appendChild(mapGrid);
+            };
+            
+            // --- Event Handlers & Modals ---
+            const handleAssetClick = (asset, assetBlock) => {
+                if (isComparisonMode) {
+                    toggleComparisonSelection(asset, assetBlock);
+                } else {
+                    showAssetDetails(asset);
+                }
+            };
+            
+            const formatDate = (dateString) => {
+                if (!dateString || dateString === 'N/A') return 'N/A';
+                const date = parseDate(dateString);
+                return date ? date.toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : dateString;
+            };
+            
+            const getAssetNumberFromDisplayName = (displayName) => {
+                // Trata os casos específicos das extrusoras primeiro
+                
+                if (displayName === 'Extrusora L1') return 'L1';
+                if (displayName === 'Extrusora L2') return 'L2';
+                if (displayName === 'CESTO INOX - TEAS') return 'TEAS';
+                if (displayName === 'CESTO INOX - MIRAMONDI') return 'MIRAMONDI';
+                    
+                    const match = displayName.match(/(\d+)$/);
+                    return match ? match[1] : null;
+                };
+
+             const showAssetDetails = (asset) => {
+                const status = getAssetStatusByAge(asset);
+                let canhaoHtml = '', ponteiraHtml = '', cilindroHtml = '', extrusoraHtml = '';
+
+                const startDate = parseDate(asset.inicioDepreciacao);
+                let ageHtml = 'N/A';
+                if (startDate) {
+                    const ageInYears = (todayUTC - startDate) / (31557600000); // ms in a year
+                    ageHtml = `${ageInYears.toFixed(1).replace('.',',')} anos`;
+                }
+
+                if (asset.canhaoInfo) {
+                    const isDepreciated = asset.canhaoInfo.idade > 5;
+                    canhaoHtml = `<div class='detail-section'><h4>Detalhes do Canhão</h4><div class='detail-box'><p><strong>Status:</strong> ${asset.canhaoInfo.status || 'N/A'}</p><p><strong>Data da Última Ação:</strong> ${asset.canhaoInfo.data}</p><p><strong>Idade:</strong> <span style='color:${isDepreciated ? 'red' : 'green'}; font-weight: ${isDepreciated ? 'bold' : 'normal'};'>${asset.canhaoInfo.idade.toLocaleString('pt-BR')} anos</span> (Vida útil: 5a)</p></div></div>`;
+                }
+                if (asset.ponteiraInfo) {
+                    let idadePonteiraHtml = 'N/A';
+                    if (asset.ponteiraInfo.atual) {
+                        const dataAtual = parseDate(asset.ponteiraInfo.atual);
+                        if (dataAtual) {
+                            const idadeAnos = (todayUTC - dataAtual) / 31557600000;
+                            const style = idadeAnos > 1 ? 'color: #ca8a04; font-weight: bold;' : 'color: green;';
+                            idadePonteiraHtml = `<span style='${style}'>${idadeAnos.toFixed(1).replace('.',',')} anos</span>`;
+                        }
+                    }
+                    const reparoStyle = asset.ponteiraInfo.reparo ? 'background-color: #fee2e2; color: #991b1b; font-weight: bold; padding: 0.25rem; border-radius: 0.25rem;' : '';
+                    ponteiraHtml = `<div class='detail-section'><h4>Detalhes da Ponteira</h4><div class='detail-box'><p style='${reparoStyle}'><strong>Reparo:</strong> ${asset.ponteiraInfo.reparo || 'N/A'}</p><p><strong>Troca Anterior:</strong> ${formatDate(asset.ponteiraInfo.anterior)}</p><p><strong>Troca Atual:</strong> ${formatDate(asset.ponteiraInfo.atual)}</p><p><strong>Idade:</strong> ${idadePonteiraHtml} (Vida útil: 1a)</p><p><strong>Desgaste:</strong> ${asset.ponteiraInfo.desgaste || 'N/A'}</p></div></div>`;
+                }
+                if(asset.cilindroInfo) {
+                    const threeYearsAgo = new Date(Date.UTC(today.getFullYear() - 3, today.getMonth(), today.getDate()));
+                    const checkAge = (dStr) => {
+                        if (!dStr || dStr === 'N/A') return { text: 'N/A', style: '' };
+                        const date = parseDate(dStr);
+                        if (!date) return { text: dStr, style: '' };
+                        const style = date < threeYearsAgo ? 'color: #ca8a04; font-weight: bold;' : '';
+                        return { text: date.toLocaleDateString('pt-BR', {timeZone: 'UTC'}), style: style };
+                    };
+                    const f = checkAge(asset.cilindroInfo.fechamento), i = checkAge(asset.cilindroInfo.injecao), e = checkAge(asset.cilindroInfo.encosto), s = checkAge(asset.cilindroInfo.sapatas);
+                    cilindroHtml = `<div class='detail-section'><h4>Reparo de Cilindros (Ciclo: 3a)</h4><div class='detail-box grid-details'><p><strong>Fechamento:</strong></p><p class='text-right' style='${f.style}'>${f.text}</p><p><strong>Injeção:</strong></p><p class='text-right' style='${i.style}'>${i.text}</p><p><strong>Encosto:</strong></p><p class='text-right' style='${e.style}'>${e.text}</p><p><strong>Sapatas:</strong></p><p class='text-right' style='${s.style}'>${s.text}</p></div></div>`;
+                }
+                if (asset.extrusoraInfo) {
+                    const info = asset.extrusoraInfo;
+                    extrusoraHtml = `<div class='detail-section'><h4>Detalhes da Extrusora</h4><div class='detail-box'><div><p><strong>Matriz:</strong></p><p style='padding-left: 1rem;'><strong>Última Troca:</strong> ${formatDate(info.matriz.ultimaTroca)} | <strong>Próxima:</strong> ${formatDate(info.matriz.proximaData)}</p></div><div><p><strong>Barril:</strong></p><p style='padding-left: 1rem;'><strong>Data:</strong> ${formatDate(info.barril.data)} | <strong>Status:</strong> ${info.barril.status}</p></div><div><p><strong>Rosca:</strong></p><p style='padding-left: 1rem;'><strong>Data:</strong> ${formatDate(info.rosca.data)} | <strong>Status:</strong> ${info.rosca.status}</p></div></div></div>`;
+                }
+
+                modalTitleEl.textContent = asset.displayName;
+                modalContentEl.innerHTML = `<div style='background-color: #f9fafb; padding: 0.5rem; border-radius: 0.25rem;'><p><strong>Nome Completo:</strong> ${asset.ativo}</p></div><p><strong>Categoria:</strong> ${asset.category}</p><p><strong>Área:</strong> ${asset.area}</p><p><strong>Início Depreciação:</strong> ${formatDate(asset.inicioDepreciacao)}</p><p><strong>Idade do Ativo:</strong> ${ageHtml}</p><p><strong>Vida Útil:</strong> ${asset.vidaUtil} anos</p><hr style='margin: 0.75rem 0;'><div class='grid-details'><p style='font-weight: 500; color: #1d4ed8;'>Valor Total:</p><p class='text-right'>${brlCurrencyFormatter.format(asset.valorTotal)} <span style='color: #6b7280; font-size: 0.75rem;'>(${sekCurrencyFormatter.format(asset.valorTotal * BRL_TO_SEK_RATE)})</span></p><p style='font-weight: 500; color: #a16207;'>Valor Depreciado:</p><p class='text-right'>${brlCurrencyFormatter.format(asset.valorDepreciado)} <span style='color: #6b7280; font-size: 0.75rem;'>(${sekCurrencyFormatter.format(asset.valorDepreciado * BRL_TO_SEK_RATE)})</span></p><p style='font-weight: 500; color: #16a34a;'>Saldo:</p><p class='text-right'>${brlCurrencyFormatter.format(asset.saldoParaDepreciar)} <span style='color: #6b7280; font-size: 0.75rem;'>(${sekCurrencyFormatter.format(asset.saldoParaDepreciar * BRL_TO_SEK_RATE)})</span></p></div><hr style='margin: 0.75rem 0;'><p><strong>Status:</strong> ${status.percent.toFixed(1).replace('.',',')}% da vida útil consumida.</p>${canhaoHtml}${ponteiraHtml}${cilindroHtml}${extrusoraHtml}<div class="performance-chart-container"><h4>Histórico de BDR (%)</h4><div id="asset-perf-chart"></div></div>`;
+                
+                modal.classList.add('visible');
+
+                // Renderiza o gráfico de performance após o modal ser exibido
+                const assetNumber = getAssetNumberFromDisplayName(asset.displayName);
+                const perfData = performanceDataParsed[assetNumber];
+
+                if (perfData) {
+                    // Garante que a data seja um timestamp para compatibilidade com o ApexCharts
+                    const chartSeries = perfData.map(d => ({ x: new Date(d.date).getTime(), y: d.bdr.toFixed(2) }));
+
+                    const options = {
+                        chart: { type: 'area', height: 160, animations: { enabled: true }, toolbar: { show: false } },
+                        stroke: { curve: 'smooth', width: 2 },
+                        series: [{ name: 'BDR', data: chartSeries }],
+                        tooltip: { x: { format: 'dd/MM/yyyy' }, y: { formatter: (val) => `${val}%` } },
+                        colors: [getAssetStatusByAge(asset).percent > 100 ? '#ef4444' : '#4f46e5'],
+                        
+                        // --- INÍCIO DA ALTERAÇÃO ---
+                        dataLabels: {
+                            enabled: true,
+                            formatter: function (val) {
+                                return val.toFixed(1) + '%';
+                            },
+                            offsetY: -10,
+                            style: {
+                                fontSize: '12px',
+                                fontWeight: 'bold',
+                                colors: ["#304758"]
+                            },
+                            background: {
+                                enabled: true,
+                                foreColor: '#fff',
+                                padding: 4,
+                                borderRadius: 2,
+                                borderWidth: 1,
+                                borderColor: '#e5e7eb',
+                                opacity: 0.9,
+                            }
+                        },
+                        // --- FIM DA ALTERAÇÃO ---
+
+                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.7, opacityTo: 0.2, stops: [0, 90, 100] }},
+                        xaxis: { type: 'datetime', labels: { format: 'MMM yy', style: { colors: '#6b7280' } } },
+                        yaxis: { 
+                            min: 0, 
+                            max: 7,
+                            labels: { 
+                                style: { colors: '#6b7280' }, 
+                                formatter: (val) => val.toFixed(0) + '%' 
+                            } 
+                        }
+                    };
+
+                    // Um pequeno timeout garante que o elemento do gráfico esteja no DOM antes de renderizar
+                    setTimeout(() => {
+                        const chartEl = document.querySelector("#asset-perf-chart");
+                        if(chartEl) {
+                            // Limpa o conteúdo do elemento antes de renderizar um novo gráfico
+                            chartEl.innerHTML = '';
+                            const chart = new ApexCharts(chartEl, options);
+                            chart.render();
+                        }
+                    }, 100);
+} else {
+                    const chartEl = document.querySelector("#asset-perf-chart");
+                    if(chartEl) chartEl.innerHTML = "<p style='text-align:center; color: var(--text-secondary); padding: 1rem;'>Dados de performance não disponíveis.</p>";
+                }
+            };
+
+            const hideModal = (modalElement) => {
+                modalElement.classList.remove('visible');
+            };
+            
+            // --- Comparison Mode Logic ---
+            const updateComparisonVisualState = () => {
+                const allAssetBlocks = document.querySelectorAll('.asset-block');
+                if (currentComparisonFamily === null) {
+                    allAssetBlocks.forEach(block => block.classList.remove('disabled-for-comparison'));
+                } else {
+                    allAssetBlocks.forEach(block => {
+                        const assetId = parseInt(block.dataset.assetId, 10);
+                        const asset = assetData.find(a => a.id === assetId);
+                        if (asset && getAssetFamily(asset) !== currentComparisonFamily) {
+                            block.classList.add('disabled-for-comparison');
+                        } else {
+                            block.classList.remove('disabled-for-comparison');
+                        }
+                    });
+                }
+            };
+            
+            const toggleComparisonSelection = (asset, assetBlock) => {
+                if (assetBlock.classList.contains('disabled-for-comparison')) return;
+
+                const family = getAssetFamily(asset);
+                if (comparisonList.length > 0 && family !== currentComparisonFamily) return;
+
+                const index = comparisonList.findIndex(item => item.id === asset.id);
+                if (index > -1) {
+                    comparisonList.splice(index, 1);
+                    assetBlock.classList.remove('selected-for-comparison');
+                    const checkmark = assetBlock.querySelector('.comparison-check');
+                    if(checkmark) checkmark.remove();
+                    if (comparisonList.length === 0) {
+                        currentComparisonFamily = null;
+                    }
+                } else {
+                    if (comparisonList.length === 0) {
+                        currentComparisonFamily = family;
+                    }
+                    comparisonList.push(asset);
+                    assetBlock.classList.add('selected-for-comparison');
+                    const checkmark = document.createElement('span');
+                    checkmark.className = 'comparison-check';
+                    checkmark.innerHTML = '&#10003;';
+                    assetBlock.appendChild(checkmark);
+                }
+                updateCompareButton();
+                updateComparisonVisualState();
+            };
+
+            const updateCompareButton = () => {
+                const count = comparisonList.length;
+                compareBtn.textContent = `Comparar (${count})`;
+                compareBtn.disabled = count < 2;
+            };
+
+                        const showComparisonView = () => {
+                if (comparisonList.length < 2) return;
+                const family = getAssetFamily(comparisonList[0]);
+
+                const baseAttributes = [
+                    { label: 'Valor Total', key: 'valorTotal', format: 'currency' },
+                    { label: 'Valor Depreciado', key: 'valorDepreciado', format: 'currency' },
+                    { label: 'Saldo p/ Depreciar', key: 'saldoParaDepreciar', format: 'currency' },
+                    { label: 'Início Depreciação', key: 'inicioDepreciacao', format: 'date' },
+                    { label: 'Idade do Ativo', key: 'age', format: 'age' },
+                    { label: 'Vida Útil (Anos)', key: 'vidaUtil' },
+                    { label: '% Vida Consumida', key: 'status', format: 'percent' },
+                ];
+
+                let familyAttributes = [];
+                if (family === 'Injetora') {
+                    familyAttributes = [
+                        { label: 'Idade Canhão (Anos)', key: 'canhaoInfo.idade' },
+                        { label: 'Idade Ponteira (Anos)', key: 'ponteiraInfo.idade' },
+                        { label: 'Reparo Fechamento', key: 'cilindroInfo.fechamento', format: 'date' },
+                        { label: 'Reparo Injeção', key: 'cilindroInfo.injecao', format: 'date' },
+                        { label: 'Reparo Encosto', key: 'cilindroInfo.encosto', format: 'date' },
+                        { label: 'Reparo Sapatas', key: 'cilindroInfo.sapatas', format: 'date' },
+                    ];
+                }
+                // Adiciona atributos de performance
+                const performanceAttributes = [
+                    { label: 'BDR Médio', key: 'performance.avg', format: 'percent' },
+                    { label: 'MTBF Médio (h)', key: 'performance.mtbf', format: 'hours' },
+                    { label: 'MTTR Médio (h)', key: 'performance.mttr', format: 'hours' },
+                    { label: 'Histórico de BDR', key: 'performance.history', format: 'sparkline' }
+                ];
+
+                const attributes = [...baseAttributes, ...familyAttributes, ...performanceAttributes];
+                let tableHtml = `<table class='comparison-table'>`;
+                tableHtml += `<thead><tr><th>Atributo</th>`;
+                comparisonList.forEach(asset => { tableHtml += `<th>${asset.displayName}</th>`; });
+                tableHtml += `</tr></thead><tbody>`;
+                
+                attributes.forEach(attr => {
+                    let row = `<tr><td>${attr.label}</td>`;
+                    comparisonList.forEach(asset => {
+                        let value;
+                        const assetNumber = getAssetNumberFromDisplayName(asset.displayName);
+                        const perfSeries = assetNumber ? performanceDataParsed[assetNumber] : null;
+                        
+                        if (attr.key === 'status') {
+                            value = getAssetStatusByAge(asset).percent;
+                        } else if (attr.key === 'age') {
+                            const startDate = parseDate(asset.inicioDepreciacao);
+                            value = startDate ? (todayUTC - startDate) / 31557600000 : null;
+                        } else if (attr.key === 'ponteiraInfo.idade') {
+                            const pInfo = asset.ponteiraInfo;
+                            if (pInfo && pInfo.atual) {
+                                const dataAtual = parseDate(pInfo.atual);
+                                value = dataAtual ? (todayUTC - dataAtual) / 31557600000 : null;
+                            } else { value = null; }
+                        } else if (attr.key === 'performance.avg') {
+                            value = perfSeries ? perfSeries.reduce((a, b) => a + b.bdr, 0) / perfSeries.length : null;
+                        } else if (attr.key === 'performance.mtbf') {
+                            value = perfSeries ? perfSeries.reduce((a, b) => a + b.mtbf, 0) / perfSeries.length : null;
+                        } else if (attr.key === 'performance.mttr') {
+                            value = perfSeries ? perfSeries.reduce((a, b) => a + b.mttr, 0) / perfSeries.length : null;
+                        } else if (attr.key === 'performance.history') {
+                            value = assetNumber;
+                        } else {
+                            value = attr.key.split('.').reduce((o, i) => o ? o[i] : null, asset);
+                        }
+                        
+                        let formattedValue = (value !== null && value !== undefined) ? value : 'N/A';
+                        if (formattedValue !== 'N/A') {
+                            if (attr.format === 'currency') {
+                                const brlValue = brlCurrencyFormatter.format(value);
+                                const sekValue = sekCurrencyFormatter.format(value * BRL_TO_SEK_RATE);
+                                formattedValue = `${brlValue}<br><span style='font-size: 0.75rem; color: var(--text-secondary);'>(${sekValue})</span>`;
+                            } else if (attr.format === 'date') {
+                                formattedValue = formatDate(value);
+                            } else if (attr.format === 'percent') {
+                                formattedValue = `${Number(value).toFixed(1).replace('.',',')}%`;
+                            } else if (attr.format === 'age' || attr.key.includes('idade')) {
+                                formattedValue = `${Number(value).toFixed(1).replace('.',',')}`;
+                            } else if (attr.format === 'hours') {
+                                formattedValue = `${Number(value).toFixed(2).replace('.',',')}`;
+                            } else if (attr.format === 'sparkline') {
+                                formattedValue = value && performanceDataParsed[value] ? `<div class="comparison-sparkline" id="spark-${value}"></div>` : 'N/A';
+                            }
+                        }
+                        row += `<td>${formattedValue}</td>`;
+                    });
+                    row += `</tr>`;
+                    tableHtml += row;
+                });
+
+                tableHtml += `</tbody></table>`;
+                comparisonModalContentEl.innerHTML = tableHtml;
+                comparisonModal.classList.add('visible');
+
+                // 👇 AQUI ESTÁ O BLOCO CORRIGIDO DENTRO DA FUNÇÃO
+                // Renderiza os minigráficos após a tabela estar no DOM
+                setTimeout(() => {
+                comparisonList.forEach(asset => {
+                    const assetNumber = getAssetNumberFromDisplayName(asset.displayName);
+                    if (assetNumber && performanceDataParsed[assetNumber]) {
+
+                        // ✅ SOLUÇÃO: Garante que o 'x' seja um timestamp para compatibilidade máxima.
+                        const chartSeries = performanceDataParsed[assetNumber].map(d => ({
+                            x: new Date(d.date).getTime(),
+                            y: d.bdr.toFixed(2)
+                        }));
+                        
+                        // Ajuste dinâmico da escala do eixo Y para melhor visualização
+                        const yValues = chartSeries.map(d => parseFloat(d.y));
+                        const dataMin = Math.min(...yValues);
+                        const dataMax = Math.max(...yValues);
+                        const yAxisMin = Math.max(0, Math.floor(dataMin - 1));
+                        const yAxisMax = Math.ceil(dataMax + 1);
+
+                        const options = {
+                            chart: { 
+                                type: 'area', 
+                                height: 80,
+                                sparkline: { enabled: false },
+                                toolbar: { show: false },
+                                zoom: { enabled: false }
+                            },
+                            grid: { show: false, padding: { left: 0, right: 0 } },
+                            stroke: { curve: 'straight', width: 1.5 },
+                            series: [{ data: chartSeries }],
+                            colors: ['#4f46e5'],
+                            xaxis: { 
+                                type: 'datetime',
+                                tickAmount: 3, // Opcional: Ajuda a controlar a quantidade de rótulos
+                                labels: {
+                                    show: true,
+                                    format: 'MMM', /* Formato para mês abreviado */
+                                    rotate: 0,
+                                    style: {
+                                        fontSize: '10px',
+                                        colors: '#6b7280'
+                                    }
+                                },
+                                axisBorder: { show: false },
+                                axisTicks: { show: false },
+                                tooltip: { enabled: false }
+                            },
+                            yaxis: { 
+                                min: yAxisMin, 
+                                max: yAxisMax,
+                                labels: { show: false }
+                            },
+                            tooltip: { enabled: false },
+                            dataLabels: {
+                                enabled: true,
+                                offsetY: -8,
+                                formatter: function (val) {
+                                    return parseFloat(val).toFixed(1) + '%';
+                                },
+                                style: {
+                                    fontSize: '10px',
+                                    fontWeight: 'bold',
+                                    colors: ['#374151']
+                                },
+                                background: {
+                                    enabled: false,
+                                    foreColor: '#374151',
+                                    padding: 3,
+                                    borderRadius: 2,
+                                    borderWidth: 1,
+                                    borderColor: '#e5e7eb',
+                                    opacity: 0.9,
+                                }
+                            }
+                        };
+                        
+                        const chartEl = document.querySelector(`#spark-${assetNumber}`);
+                        if (chartEl) {
+                            const chart = new ApexCharts(chartEl, options);
+                            chart.render();
+                        }
+                    }
+                });
+            }, 100);
+        }; // Fim da função showComparisonView
+
+            const resetComparisonMode = () => {
+                comparisonList = [];
+                currentComparisonFamily = null;
+                updateCompareButton();
+                updateComparisonVisualState();
+                document.querySelectorAll('.asset-block').forEach(el => {
+                    el.classList.remove('selected-for-comparison');
+                    const checkmark = el.querySelector('.comparison-check');
+                    if(checkmark) checkmark.remove();
+                });
+            };
+
+            const handleFilterChange = () => {
+                const selectedCategory = categoryFilter.value;
+                const filteredData = selectedCategory === 'all' ? assetData : assetData.filter(asset => asset.category === selectedCategory);
+                updateKPIs(filteredData);
+                renderAssets(filteredData);
+                if (isComparisonMode) { 
+                    updateComparisonVisualState();
+                    comparisonList.forEach(selectedAsset => {
+                        const assetBlock = document.querySelector(`.asset-block[data-asset-id='${selectedAsset.id}']`);
+                        if (assetBlock) {
+                             assetBlock.classList.add('selected-for-comparison');
+                             const checkmark = document.createElement('span');
+                             checkmark.className = 'comparison-check';
+                             checkmark.innerHTML = '&#10003;';
+                             assetBlock.appendChild(checkmark);
+                        }
+                    });
+                }
+            };
+
+            // --- Initial Setup & Event Listeners ---
+            setupFilters();
+            
+            categoryFilter.addEventListener('change', handleFilterChange);
+            modalCloseBtn.addEventListener('click', () => hideModal(modal));
+            modal.addEventListener('click', (e) => e.target === modal && hideModal(modal));
+            
+            comparisonToggle.addEventListener('change', (e) => {
+                isComparisonMode = e.target.checked;
+                compareBtn.classList.toggle('hidden', !isComparisonMode);
+                if (!isComparisonMode) {
+                    resetComparisonMode();
+                }
+            });
+            compareBtn.addEventListener('click', () => {
+                if (comparisonList.length >= 2) {
+                    showComparisonView();
+                }
+            });
+            comparisonModalCloseBtn.addEventListener('click', () => hideModal(comparisonModal));
+            comparisonModal.addEventListener('click', (e) => e.target === comparisonModal && hideModal(comparisonModal));
+
+            handleFilterChange();
+        });
+    </script>
+
+</body>
+</html>
