@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa de Atuação Preventiva - Atualizado</title>
+    
+    <!-- Tailwind CSS (Estilos) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM (Lógica) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel (Para entender o código React no navegador) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.3s ease-out;
+        }
+        
+        .pattern-diagonal {
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,255,255,0.1) 5px, rgba(255,255,255,0.1) 10px);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+
+        // --- ICONES ---
+        const Icons = {
+            Calendar: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
+            Wrench: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>,
+            Clock: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+            CheckCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+            XCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>,
+            Briefcase: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>,
+            Info: () => <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>,
+            Hammer: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 12-8.5 8.5c-.83.83-2.17.83-3 0 0 0 0 0 0 0a2.12 2.12 0 0 1 0-3L12 9"/><path d="M17.64 15 22 10.64"/><path d="m20.91 11.7-1.25-1.25c-.6-.6-.93-1.4-.93-2.25V7.86c0-.55-.45-1-1-1H14.5c-.85 0-1.65-.33-2.25-.93L11 4.64"/></svg>,
+            Zap: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+            Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+            ArrowLeft: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>,
+            AlertTriangle: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>,
+            AlertCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+        };
+
+        // --- DADOS ---
+
+        const activities = [
+            { id: '1', asset: 'Torre de resfriamento Funilaria', desc: 'Troca dos radiadores + preventiva anual (Funilaria parada) - Backlog', mec: '16h (1 mec / 2 dias)', ele: '', aut: '' },
+            { id: '2', asset: 'Linha de cavidades', desc: 'Estações de solda costura - Alterar sistema de fixação (parafuso para prisioneiro)', mec: '32h (2 mec / 2 dias)', ele: '', aut: '' },
+            { id: '3', asset: 'Linha de cavidades', desc: 'Estação 5040 - Alinhar solda ponto.', mec: '16h (1 mec / 2 dias)', ele: '', aut: '' },
+            { id: '4', asset: 'Linha de cavidades', desc: 'Chiller das prensas - Troca de rolamentos da bomba do chiler.', mec: '4h (1 mec / 1 dia)', ele: '', aut: '' },
+            { id: '5', asset: 'Linha de cavidades', desc: 'Estação 5050 - Revisão no amortecedor de impacto.', mec: '4h (1 mec / 1 dia)', ele: '', aut: '' },
+            { id: '6', asset: 'Linha de cavidades', desc: 'Estações de solda costura - Substituir mangueiras deterioradas do dielétrico.', mec: '16h (2 mec / 1 dia)', ele: '', aut: '' },
+            { id: '7', asset: 'Linha de cavidades', desc: 'Estações de solda costura - Mapear necessidade para instalação do filtro de retorno', mec: '4h (1 mec / 1 dia)', ele: '', aut: '' },
+            { id: '8', asset: 'Linha de cavidades', desc: 'Chillers - Limpeza e substituição no líquido de arrefecimento (água + aditivo)', mec: '160h (2 mec / 5 dias)', ele: '', aut: '' },
+            { id: '9', asset: 'Wrapper', desc: 'Desmontar e investigar vazamento de óleo nas prensas hidráulicas', mec: '16h (1 mec / 3 dias)', ele: '', aut: '' },
+            { id: '10', asset: 'Prensa 108', desc: 'Manutenção preventiva endireitador de chapas - Backlog', mec: '32h (2 mec / 2 dias)', ele: '', aut: '' },
+            { id: '11', asset: 'Prensa 117', desc: 'Manutenção preventiva alimentador de chapas - Backlog', mec: '32h (2 mec / 2 dias)', ele: '', aut: '' },
+            { id: '12', asset: 'Prensa 123', desc: 'Manutenção preventiva alimentador de chapas - Backlog', mec: '32h (2 mec / 2 dias)', ele: '', aut: '' },
+            { id: '13', asset: 'Pintura', desc: 'Revisão nos motores dos queimadores e substituição dos rolamentos - Backlog', mec: '', ele: '', aut: '' },
+            { id: '14', asset: 'Linha 4 - Clinch', desc: 'Robo 33 - Troca de haste e vedações do cilindro de cravamento.', mec: '16h (2 mec / 1 dia)', ele: '', aut: '' },
+            { id: '15', asset: 'Linha 4 - Clinch', desc: 'Unidade hidráulida robô 30 e 31 - Substituir bomba hidráulica (Preventiva).', mec: '8h (2 mec / 1 dia)', ele: '', aut: '' },
+            { id: '16', asset: 'Linha 4 - Clinch', desc: 'Carro ejetor - Substituir fuso danificado.', mec: '8h (2 mec / 1 dia)', ele: '', aut: '' },
+            { id: '17', asset: 'Linha 4 - Clinch', desc: 'Dobradeira - Teste para medição do torque nos motores (precisa de operador)', mec: '', ele: '', aut: '' },
+            { id: '18', asset: 'LCL', desc: 'Manutenção preventiva mecânica - Backlog', mec: '16h (1 mec / 2 dias)', ele: '', aut: '' },
+            { id: '19', asset: 'Pintura', desc: 'Migração do controle de temperatura para o CLP da máquina', mec: '', ele: '', aut: '' },
+            { id: '20', asset: 'Linha 4 - Clinch', desc: 'Revisão nos sensores e cabeamentos (geral).', mec: '', ele: '', aut: '' },
+            { id: '21', asset: 'Painéis da SFB - Prédio', desc: 'Realizar limpeza e reaperto dos contatos', mec: '', ele: '32h (2 ele / 2 dias)', aut: '' },
+            { id: '22', asset: 'Painéis Esmaltação', desc: 'Realizar limpeza e reaperto dos contatos', mec: '', ele: '16h (2 ele / 1 dia)', aut: '' },
+            { id: '23', asset: 'Painéis Pintura', desc: 'Realizar limpeza e reaperto dos contatos', mec: '', ele: '16h (2 ele / 1 dia)', aut: '' },
+            { id: '24', asset: 'Painéis Cavidades', desc: 'Realizar limpeza e reaperto dos contatos', mec: '', ele: '16h (2 ele / 1 dia)', aut: '' },
+            { id: '25', asset: 'Painéis Funilaria', desc: 'Realizar limpeza e reaperto dos contatos', mec: '', ele: '144h (1 ele / 3 dias)', aut: '' },
+            { id: '26', asset: 'Painéis Press Shop', desc: 'Realizar limpeza e reaperto dos contatos', mec: '', ele: '32h (1 ele / 3 dias)', aut: '' },
+            { id: '27', asset: 'Linha de Solda', desc: 'Realizar troca das mangueiras pneumáticas.', mec: '16h (1 mec / 2 dias)', ele: '', aut: '' },
+            { id: '28', asset: 'Linha 4 - Clinch', desc: 'Tubulação hidráulica - revisar fixações, soldagem, parafusamento, substituir tubos', mec: 'Verif. Fixações', ele: '', aut: '' },
+        ];
+
+        // --- IMPACTOS CLASSIFICADOS ---
+        const impacts = [
+            { id: '8', desc: 'M. Bruno: Baixa 29/12. Execução mantida por B. Donizete e M. Freri.', severity: 'partial', type: 'partial' },
+            { id: '9', desc: 'M. Bruno: Baixa 30/12. Execução mantida por B. Birce.', severity: 'partial', type: 'partial' },
+            { id: '14', desc: 'Raonny: Baixa 27/12. Execução mantida por Marcio R.', severity: 'partial', type: 'partial' },
+            { id: '20', desc: 'Priscila: Baixa 27/12. Execução mantida por Renan Fatore (3ºT).', severity: 'partial', type: 'partial' },
+            { id: '21', desc: 'B. Birce: Baixa 26-27/12. Execução mantida por Edmilton, Paulo, Sergio.', severity: 'partial', type: 'partial' },
+            { id: '25', desc: 'Edmilton: Baixa 29-30/12. Execução mantida por Paulo e Sergio.', severity: 'partial', type: 'partial' },
+        ];
+
+        const scheduleData = [
+            { name: 'MAYKEL ANTONIO SILVA', shift: 1, dates: { '20/12': 'Folga', '21/12': 'Domingo', '22/12': '2 h treinamento', '23/12': 'Corretiva', '24/12': 'Corretiva', '25/12': 'Natal', '26/12': 'Corretiva', '27/12': 'Folga', '28/12': 'Domingo', '29/12': 'Corretiva', '30/12': 'Corretiva', '31/12': 'Corretiva', '01/01': 'Ano Novo', '02/01': '17', '03/01': '19', '04/01': 'Domingo' } },
+            { name: 'BRUNO DOMINGOS OLIVEIRA', shift: 1, dates: { '20/12': 'Corretiva', '21/12': 'Folga 5x1', '22/12': '2 h treinamento', '23/12': 'Baixa', '24/12': 'Baixa', '25/12': 'Natal', '26/12': 'Baixa', '27/12': 'Folga 5x1', '28/12': '16 / 12', '29/12': 'Corretiva', '30/12': 'Corretiva', '31/12': 'Folga 5x1', '01/01': 'Ano Novo', '02/01': 'Folga 5x1', '03/01': '', '04/01': 'Domingo' } },
+            { name: 'PRISCILA MARIA MELLO', shift: 1, dates: { '20/12': 'Corretiva', '21/12': 'Domingo', '22/12': 'Folga 5x1', '23/12': 'Corretiva', '24/12': 'Baixa', '25/12': 'Natal', '26/12': 'Baixa', '27/12': 'IMPACTO PARCIAL (ID 20)', '28/12': 'Folga 5x1', '29/12': 'Corretiva', '30/12': 'Corretiva', '31/12': 'Folga 5x1', '01/01': 'Ano Novo', '02/01': 'Corretiva', '03/01': 'Folga 5x1', '04/01': 'Domingo' } },
+            { name: 'ROBERTO PEREIRA', shift: 1, dates: { '20/12': 'Baixa', '21/12': 'Domingo', '22/12': '2 h treinamento', '23/12': 'Corretiva', '24/12': 'Corretiva', '25/12': 'Natal', '26/12': 'Corretiva', '27/12': '20', '28/12': 'Domingo', '29/12': 'Baixa', '30/12': 'Baixa', '31/12': 'Baixa', '01/01': 'Ano Novo', '02/01': 'Corretiva', '03/01': '19', '04/01': 'Domingo' } },
+            { name: 'ALISTON HENRIQUE DE ALMEIDA', shift: 1, dates: { '20/12': 'Baixa', '21/12': 'Baixa', '22/12': 'Folga 5x1', '23/12': 'Corretiva', '24/12': 'Corretiva', '25/12': 'Natal', '26/12': 'Corretiva', '27/12': '14 / 15', '28/12': 'Folga 5x1', '29/12': 'Baixa', '30/12': 'Baixa', '31/12': 'Baixa', '01/01': 'Ano Novo', '02/01': 'Corretiva', '03/01': 'Folga 5x1', '04/01': 'Domingo' } },
+            { name: 'FELIPE AUGUSTO RABELO OLIVEIRA', shift: 1, dates: { '20/12': 'Corretiva', '21/12': 'Domingo', '22/12': '2 h treinamento', '23/12': 'Corretiva', '24/12': 'Folga', '25/12': 'Natal', '26/12': 'Corretiva', '27/12': 'Folga 5x1', '28/12': '16 / 12', '29/12': 'Corretiva', '30/12': 'Corretiva', '31/12': 'Corretiva', '01/01': 'Ano Novo', '02/01': 'Folga 5x1', '03/01': '11', '04/01': 'Domingo' } },
+            { name: 'MARCIO RICARDO MARTINS', shift: 1, dates: { '20/12': 'Corretiva', '21/12': 'Domingo', '22/12': '2 h treinamento', '23/12': 'Corretiva', '24/12': 'Folga', '25/12': 'Natal', '26/12': 'Corretiva', '27/12': '14 / 15', '28/12': 'Domingo', '29/12': 'Corretiva', '30/12': 'Corretiva', '31/12': 'Baixa', '01/01': 'Ano Novo', '02/01': 'Corretiva', '03/01': '11', '04/01': 'Domingo' } },
+            { name: 'RAONNY CRUZ', shift: 1, dates: { '20/12': 'Corretiva', '21/12': 'Domingo', '22/12': '2 h treinamento', '23/12': 'Corretiva', '24/12': 'Baixa', '25/12': 'Natal', '26/12': 'Baixa', '27/12': 'IMPACTO PARCIAL (ID 14)', '28/12': 'Domingo', '29/12': 'Corretiva', '30/12': 'Corretiva', '31/12': 'Corretiva', '01/01': 'Ano Novo', '02/01': 'Corretiva', '03/01': '', '04/01': 'Domingo' } },
+            { name: 'EDMILTON VICENTINI', shift: 2, dates: { '20/12': 'Corretiva', '21/12': 'Domingo', '22/12': '2 h treinamento', '23/12': '13', '24/12': 'Corretiva', '25/12': 'Natal', '26/12': '21', '27/12': '21', '28/12': 'Domingo', '29/12': 'IMPACTO PARCIAL (ID 25)', '30/12': 'IMPACTO PARCIAL (ID 25)', '31/12': 'Baixa', '01/01': 'Ano Novo', '02/01': 'Testes', '03/01': '', '04/01': 'Domingo' } },
+            { name: 'PAULO HENRIQUE DA SILVA GONÇALVES', shift: 2, dates: { '20/12': '10', '21/12': '10', '22/12': 'Folga 5x1', '23/12': '13', '24/12': 'Baixa', '25/12': 'Natal', '26/12': '21', '27/12': '21', '28/12': 'Folga 5x1', '29/12': '25', '30/12': '25', '31/12': 'Corretiva', '01/01': 'Ano Novo', '02/01': 'Folga 5x1', '03/01': '', '04/01': 'Domingo' } },
+            { name: 'SERGIO WILLIAN GOMES', shift: 2, dates: { '20/12': '10', '21/12': 'Folga 5x1', '22/12': '2 h treinamento', '23/12': '21', '24/12': 'Corretiva', '25/12': 'Natal', '26/12': '21', '27/12': 'Folga 5x1', '28/12': 'Domingo', '29/12': '25', '30/12': '25', '31/12': 'Corretiva', '01/01': 'Ano Novo', '02/01': 'Folga 5x1', '03/01': '', '04/01': 'Domingo' } },
+            { name: 'BRUNO BIRCE RODRIGUES', shift: 2, dates: { '20/12': '10', '21/12': '10', '22/12': 'Folga 5x1', '23/12': '9', '24/12': 'Corretiva', '25/12': 'Natal', '26/12': 'IMPACTO PARCIAL (ID 21)', '27/12': 'IMPACTO PARCIAL (ID 21)', '28/12': 'Folga 5x1', '29/12': '8', '30/12': '9', '31/12': 'Corretiva', '01/01': 'Ano Novo', '02/01': '', '03/01': 'Folga 5x1', '04/01': 'Domingo' } },
+            { name: 'BRUNO DONIZETE ROMÃO', shift: 2, dates: { '20/12': '6', '21/12': 'Folga 5x1', '22/12': '6 / + 2h treinamento', '23/12': '8', '24/12': 'Corretiva', '25/12': 'Natal', '26/12': '4 / 5 / 7', '27/12': 'Folga 5x1', '28/12': '16 / 12', '29/12': '8', '30/12': '9', '31/12': 'Corretiva', '01/01': 'Ano Novo', '02/01': 'Folga 5x1', '03/01': '', '04/01': 'Domingo' } },
+            { name: 'LUIS ANTONIO AUGUSTINHO', shift: 2, dates: { '20/12': 'Férias', '21/12': 'Férias', '22/12': 'Férias', '23/12': 'Férias', '24/12': 'Férias', '25/12': 'Férias', '26/12': 'Férias', '27/12': 'Férias', '28/12': 'Férias', '29/12': 'Férias', '30/12': 'Férias', '31/12': 'Férias', '01/01': 'Férias', '02/01': 'Férias', '03/01': 'Férias', '04/01': 'Férias' } },
+            { name: 'MARCOS ANTONIO BRUNO', shift: 2, dates: { '20/12': '6', '21/12': 'Domingo', '22/12': '6 / + 2h treinamento', '23/12': '8', '24/12': 'Corretiva', '25/12': 'Natal', '26/12': '4 / 5 / 7', '27/12': '21', '28/12': 'Domingo', '29/12': 'IMPACTO PARCIAL (ID 8)', '30/12': 'IMPACTO PARCIAL (ID 9)', '31/12': 'Corretiva', '01/01': 'Ano Novo', '02/01': 'Testes', '03/01': '', '04/01': 'Domingo' } },
+            { name: 'DEIVID JOSE DA SILVA', shift: 3, dates: { '20/12': 'Folga', '21/12': '26', '22/12': '2 h treinamento / 26', '23/12': '26', '24/12': 'Folga', '25/12': 'Natal', '26/12': '22', '27/12': 'Folga', '28/12': '12', '29/12': '24', '30/12': '23', '31/12': 'Folga', '01/01': 'Ano Novo', '02/01': 'Testes', '03/01': 'Folga', '04/01': '' } },
+            { name: 'LUAN CARLOS HIPOLLITO', shift: 3, dates: { '20/12': 'Folga', '21/12': '26', '22/12': '2 h treinamento / 26', '23/12': '26', '24/12': 'Folga', '25/12': 'Natal', '26/12': '22', '27/12': 'Folga', '28/12': '12', '29/12': '24', '30/12': '23', '31/12': 'Folga', '01/01': 'Ano Novo', '02/01': 'Testes', '03/01': 'Folga', '04/01': '' } },
+            { name: 'MAURICIO FRERI', shift: 3, dates: { '20/12': 'Folga', '21/12': '8', '22/12': '8 / 2 h treinamento', '23/12': '8', '24/12': 'Folga', '25/12': 'Natal', '26/12': '8', '27/12': 'Folga', '28/12': '8', '29/12': '8', '30/12': '', '31/12': 'Folga', '01/01': 'Ano Novo', '02/01': 'Testes', '03/01': '', '04/01': 'Domingo' } },
+            { name: 'ALVARO CARVALHO SILVA', shift: 3, dates: { '20/12': 'Férias', '21/12': 'Férias', '22/12': 'Férias', '23/12': 'Férias', '24/12': 'Férias', '25/12': 'Férias', '26/12': 'Férias', '27/12': 'Férias', '28/12': 'Férias', '29/12': 'Férias', '30/12': 'Férias', '31/12': 'Férias', '01/01': 'Férias', '02/01': 'Férias', '03/01': 'Férias', '04/01': 'Férias' } },
+            { name: 'MARCIO PEREIRA RIBEIRO', shift: 3, dates: { '20/12': 'Folga', '21/12': '8', '22/12': '8 / 2 h treinamento', '23/12': '8', '24/12': 'Folga', '25/12': 'Natal', '26/12': '8', '27/12': 'Folga', '28/12': '8', '29/12': '8', '30/12': '27', '31/12': 'Folga', '01/01': 'Ano Novo', '02/01': 'Testes', '03/01': 'Folga', '04/01': '' } },
+            { name: 'RENAN FATORE MOTA', shift: 3, dates: { '20/12': 'Folga', '21/12': '18', '22/12': '2 h treinamento', '23/12': '18', '24/12': 'Folga', '25/12': 'Natal', '26/12': '27', '27/12': 'Folga', '28/12': '12', '29/12': '27', '30/12': '27', '31/12': 'Folga', '01/01': 'Ano Novo', '02/01': 'Testes', '03/01': 'Folga', '04/01': '' } },
+        ];
+
+        const dateKeys = [
+            '20/12', '21/12', '22/12', '23/12', '24/12', '25/12', '26/12', 
+            '27/12', '28/12', '29/12', '30/12', '31/12', '01/01', '02/01', '03/01', '04/01'
+        ];
+
+        // --- HELPER FUNCTIONS ---
+
+        const getActivitiesFromCell = (cellValue) => {
+            if (!cellValue) return [];
+            const matches = cellValue.match(/\b([1-9]|[1-2][0-9]|3[0-9])\b(?!\s*h)/g);
+            return matches || [];
+        };
+
+        const getTaskColor = (text) => {
+            if (!text) return 'bg-gray-50';
+            const lower = text.toLowerCase().trim();
+            
+            if (lower.includes('cancelado')) return 'bg-red-800 text-white font-bold border-red-900 shadow-md ring-2 ring-red-400/50';
+            if (lower.includes('impacto parcial')) return 'bg-yellow-400 text-yellow-900 font-bold border-yellow-500 shadow-sm';
+            if (lower.includes('baixa')) return 'bg-red-200 text-red-900 border-red-300 font-medium';
+
+            if (lower === 'férias') return 'bg-purple-200 text-purple-800 border-purple-300';
+            if (lower === 'natal' || lower === 'ano novo') return 'bg-green-100 text-green-800 font-bold border-green-300';
+            if (lower.includes('folga') || lower === 'domingo') return 'bg-gray-200 text-gray-500 border-gray-300';
+            if (lower.includes('corretiva')) return 'bg-orange-100 text-orange-800 border-orange-300 font-medium';
+            if (lower.includes('testes')) return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+            
+            const ids = getActivitiesFromCell(text);
+            if (lower.includes('treinamento') && ids.length === 0) {
+                return 'bg-blue-100 text-blue-800 border-blue-200';
+            }
+            
+            if (ids.length > 0) return 'bg-emerald-500 text-white font-bold border-emerald-600 shadow-sm transition-colors';
+            
+            return 'bg-white';
+        };
+
+        const getTaskLabel = (text) => {
+            if (!text) return '-';
+            
+            if (text.toLowerCase().includes('cancelado')) {
+                return 'CANCELADO';
+            }
+            if (text.toLowerCase().includes('impacto parcial')) {
+                return 'PARCIAL';
+            }
+            if (text.toLowerCase().includes('baixa')) {
+                return 'BAIXA';
+            }
+
+            const ids = getActivitiesFromCell(text);
+            
+            if (ids.length > 0) {
+                if (text.toLowerCase().includes('treinamento')) {
+                    return `${ids[0]} + Treino`;
+                }
+                return text;
+            }
+
+            return text;
+        };
+
+        // --- COMPONENTES ---
+
+        const ImpactPanel = ({ impacts }) => (
+            <div className="bg-white border border-red-200 rounded-xl p-4 mb-6 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-red-50 rounded-bl-full -mr-16 -mt-16 z-0 pointer-events-none"></div>
+                <div className="flex items-start gap-3 relative z-10">
+                    <div className="text-red-600 mt-1"><Icons.AlertTriangle /></div>
+                    <div className="flex-1">
+                        <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                            Painel de Riscos e Impactos
+                            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full border border-red-200">Atenção Requerida</span>
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {impacts.map((impact, idx) => {
+                                const act = activities.find(a => a.id === impact.id);
+                                const isPartial = impact.type === 'partial';
+                                const borderColor = isPartial ? 'border-yellow-400' : 'border-red-500';
+                                const titleColor = isPartial ? 'text-yellow-700' : 'text-red-700';
+                                const badgeColor = isPartial ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 'bg-red-100 text-red-800 border-red-200';
+                                const badgeText = isPartial ? 'Impacto Parcial' : 'Cancelado Total';
+
+                                return (
+                                    <div key={idx} className={`bg-gray-50 p-3 rounded-lg border-l-4 ${borderColor} shadow-sm flex flex-col transition-all hover:shadow-md`}>
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className={`font-bold ${titleColor}`}>Atividade ID {impact.id}</span>
+                                            <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border ${badgeColor}`}>
+                                                {badgeText}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs text-gray-900 font-semibold mb-1 line-clamp-1" title={act?.asset}>{act?.asset}</div>
+                                        <p className="text-[11px] text-gray-600 italic mb-2 leading-tight">{impact.desc}</p>
+                                        <div className="mt-auto pt-2 border-t border-gray-200 text-[10px] text-gray-400 truncate">
+                                            {act?.desc}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const ResourceBadge = ({ type, text }) => {
+            if (!text) return null;
+            const colors = {
+                mec: 'bg-orange-100 text-orange-700 border-orange-200',
+                ele: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+                aut: 'bg-cyan-100 text-cyan-700 border-cyan-200'
+            };
+            const icons = {
+                mec: <Icons.Hammer />,
+                ele: <Icons.Zap />,
+                aut: <Icons.Settings />
+            };
+            
+            const simpleText = text.split('(')[0].trim();
+
+            return (
+                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border ${colors[type]}`}>
+                    {icons[type]} {simpleText}
+                </span>
+            );
+        };
+
+        const App = () => {
+            const [selectedShift, setSelectedShift] = useState('All');
+            const [selectedDay, setSelectedDay] = useState(null);
+            const [hoveredTask, setHoveredTask] = useState(null);
+            const [selectedActivityId, setSelectedActivityId] = useState(null);
+
+            const filteredSchedule = useMemo(() => {
+                if (selectedShift === 'All') return scheduleData;
+                return scheduleData.filter(p => p.shift === parseInt(selectedShift));
+            }, [selectedShift]);
+
+            const getActivityDetails = (id) => activities.find(a => a.id === id);
+
+            const activityStatus = useMemo(() => {
+                const statusMap = {};
+                const scheduledIds = new Set();
+                
+                // Find all scheduled IDs in the cells
+                scheduleData.forEach(person => {
+                    Object.values(person.dates).forEach(val => {
+                        if (!val) return;
+                        const ids = getActivitiesFromCell(val);
+                        ids.forEach(id => scheduledIds.add(id));
+                    });
+                });
+
+                const impactIds = new Set(impacts.map(i => i.id));
+
+                activities.forEach(act => {
+                    if (impactIds.has(act.id)) {
+                        statusMap[act.id] = 'impacto';
+                    } else if (scheduledIds.has(act.id)) {
+                        statusMap[act.id] = 'concluir';
+                    } else {
+                        statusMap[act.id] = 'nao-programado';
+                    }
+                });
+
+                return statusMap;
+            }, [scheduleData, impacts]);
+
+            const dayStats = useMemo(() => {
+                if (!selectedDay) return null;
+                
+                let preventiveCount = 0;
+                let correctiveCount = 0;
+                let unavailableCount = 0;
+                let cancelledCount = 0;
+                let partialCount = 0;
+                let teamMembers = 0;
+                const activeTasks = [];
+
+                filteredSchedule.forEach(person => {
+                    teamMembers++;
+                    const val = person.dates[selectedDay];
+                    if (!val) {
+                        unavailableCount++;
+                        return;
+                    }
+                    const lower = val.toLowerCase();
+                    
+                    if (lower.includes('cancelado')) {
+                         cancelledCount++;
+                         unavailableCount++;
+                         return; 
+                    }
+                    if (lower.includes('impacto parcial')) {
+                        partialCount++;
+                        return;
+                    }
+
+                    const ids = getActivitiesFromCell(val);
+                    if (ids.length > 0) {
+                        preventiveCount++;
+                        ids.forEach(id => {
+                            const det = getActivityDetails(id);
+                            if (det) activeTasks.push({ ...det, assignedTo: person.name });
+                        });
+                    } else if (lower.includes('corretiva')) {
+                        correctiveCount++;
+                    } else if (lower.includes('folga') || lower.includes('férias') || lower.includes('baixa') || lower === 'domingo' || lower === 'natal' || lower === 'ano novo') {
+                        unavailableCount++;
+                    }
+                });
+
+                activeTasks.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+
+                return { preventiveCount, correctiveCount, unavailableCount, cancelledCount, partialCount, teamMembers, activeTasks };
+            }, [selectedDay, filteredSchedule]);
+
+            const toggleActivitySelection = (id) => {
+                if (selectedActivityId === id) {
+                    setSelectedActivityId(null);
+                } else {
+                    setSelectedActivityId(id);
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-50 text-slate-800 font-sans">
+                    
+                    {/* Header */}
+                    <header className="bg-slate-900 text-white p-6 shadow-md z-30 relative">
+                        <div className="max-w-7xl mx-auto flex flex-col gap-4 md:flex-row justify-between items-center">
+                            <div className="flex items-center gap-4">
+                                <a href="index.html" className="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium">
+                                    <Icons.ArrowLeft />
+                                    <span className="hidden sm:inline">Menu</span>
+                                </a>
+                                <div>
+                                    <h1 className="text-2xl font-bold flex items-center gap-2">
+                                        <span className="text-emerald-400"><Icons.Wrench /></span>
+                                        Mapa de Atuação Preventiva
+                                    </h1>
+                                    <p className="text-slate-400 text-sm mt-1">Planejamento 20/Dez a 04/Jan</p>
+                                </div>
+                            </div>
+                            
+                            <div className="mt-4 md:mt-0 flex gap-3 bg-slate-800 p-2 rounded-lg">
+                                {['All', '1', '2', '3'].map(shift => (
+                                    <button 
+                                        key={shift}
+                                        onClick={() => setSelectedShift(shift)}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${selectedShift === shift ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-700'}`}
+                                    >
+                                        {shift === 'All' ? 'Todos os Turnos' : `Turno ${shift}`}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-[98%] mx-auto py-6 space-y-6">
+                        
+                        {/* ALERT PANEL */}
+                        <ImpactPanel impacts={impacts} />
+
+                        {/* Statistics Bar */}
+                        <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full bg-emerald-500"></div>
+                                <span className="text-sm text-gray-600 font-medium">Preventiva</span>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full bg-orange-200 border border-orange-300"></div>
+                                <span className="text-sm text-gray-600 font-medium">Corretiva</span>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full bg-blue-100 border border-blue-200"></div>
+                                <span className="text-sm text-gray-600 font-medium">Treinamento</span>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full bg-gray-200 border border-gray-300"></div>
+                                <span className="text-sm text-gray-600 font-medium">Folga</span>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full bg-red-200 border border-red-300"></div>
+                                <span className="text-sm text-gray-600 font-medium">Baixa</span>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full bg-yellow-400 border border-yellow-500"></div>
+                                <span className="text-sm text-gray-600 font-medium">Parcial</span>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full bg-red-800 border border-red-900"></div>
+                                <span className="text-sm text-gray-600 font-medium">Cancelado</span>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col lg:flex-row gap-6 relative items-start">
+                            
+                            {/* Main Gantt Chart */}
+                            <div className="flex-1 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col z-10">
+                                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                                    <h2 className="font-semibold text-gray-700 flex items-center gap-2">
+                                        <span className="text-gray-500"><Icons.Calendar /></span>
+                                        Cronograma Geral
+                                    </h2>
+                                    <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded border">
+                                        Legenda: <span className="text-red-600 font-bold">Vermelho = Cancelado</span>, <span className="text-yellow-600 font-bold">Amarelo = Parcial</span>
+                                    </span>
+                                </div>
+                                
+                                <div className="overflow-x-auto custom-scrollbar">
+                                    <table className="w-full text-sm text-left border-collapse">
+                                        <thead>
+                                            <tr>
+                                                <th className="sticky left-0 z-20 bg-gray-100 p-3 font-semibold text-gray-700 min-w-[200px] border-b border-r shadow-sm">
+                                                    Colaborador
+                                                </th>
+                                                <th className="sticky left-[200px] z-20 bg-gray-100 p-3 font-semibold text-gray-700 w-12 text-center border-b border-r">
+                                                    T
+                                                </th>
+                                                {dateKeys.map(date => (
+                                                    <th 
+                                                        key={date} 
+                                                        onClick={() => setSelectedDay(date)}
+                                                        className={`min-w-[80px] p-2 font-medium text-center border-b border-r cursor-pointer transition-colors ${selectedDay === date ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-200'}`}
+                                                    >
+                                                        {date}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredSchedule.map((person, idx) => (
+                                                <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                                    <td className="sticky left-0 z-10 bg-white p-3 border-b border-r font-medium text-gray-700 text-xs shadow-sm truncate max-w-[200px]">
+                                                        {person.name}
+                                                    </td>
+                                                    <td className="sticky left-[200px] z-10 bg-white p-2 border-b border-r text-center text-xs text-gray-500 font-bold">
+                                                        {person.shift}
+                                                    </td>
+                                                    {dateKeys.map(date => {
+                                                        const cellValue = person.dates[date];
+                                                        const ids = getActivitiesFromCell(cellValue);
+                                                        const hasPreventive = ids.length > 0;
+                                                        
+                                                        const isSelected = selectedActivityId && ids.includes(selectedActivityId);
+                                                        const isDimmed = selectedActivityId && hasPreventive && !ids.includes(selectedActivityId);
+                                                        
+                                                        return (
+                                                            <td 
+                                                                key={date} 
+                                                                className={`p-1 border-b border-r relative group text-center align-middle h-12 transition-opacity duration-300 ${isDimmed ? 'opacity-30' : 'opacity-100'}`}
+                                                            >
+                                                                <div 
+                                                                    className={`
+                                                                        w-full h-full flex items-center justify-center rounded text-[9px] md:text-[10px] leading-tight px-1 cursor-default border transition-all duration-300
+                                                                        ${getTaskColor(cellValue)}
+                                                                        ${isSelected ? 'ring-4 ring-emerald-300 scale-105 z-20 shadow-lg font-bold' : ''}
+                                                                    `}
+                                                                    onMouseEnter={() => hasPreventive ? setHoveredTask(ids[0]) : setHoveredTask(null)}
+                                                                    onMouseLeave={() => setHoveredTask(null)}
+                                                                >
+                                                                    {getTaskLabel(cellValue)}
+                                                                </div>
+                                                                
+                                                                {/* Tooltip normal para preventivas */}
+                                                                {hasPreventive && !isDimmed && (
+                                                                    <div className="absolute hidden group-hover:block z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-80 p-4 bg-slate-800 text-white text-xs rounded shadow-xl pointer-events-none border border-slate-700">
+                                                                        <div className="font-bold border-b border-slate-600 pb-2 mb-2 text-emerald-400 text-sm">Detalhes da Atividade:</div>
+                                                                        {ids.map(id => {
+                                                                            const act = getActivityDetails(id);
+                                                                            return (
+                                                                                <div key={id} className="mb-3 last:mb-0">
+                                                                                    <div className="flex justify-between items-start">
+                                                                                        <strong className="block text-slate-100 text-sm mb-1">{act?.asset || `Atividade ${id}`}</strong>
+                                                                                        <span className="bg-slate-700 px-1.5 rounded text-[10px]">ID {id}</span>
+                                                                                    </div>
+                                                                                    <span className="text-slate-300 block mb-2">{act?.desc || 'Sem descrição'}</span>
+                                                                                    
+                                                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                                                        {act?.mec && <ResourceBadge type="mec" text={act.mec} />}
+                                                                                        {act?.ele && <ResourceBadge type="ele" text={act.ele} />}
+                                                                                        {act?.aut && <ResourceBadge type="aut" text={act.aut} />}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )
+                                                                        })}
+                                                                         <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-slate-800 rotate-45 border-r border-b border-slate-700"></div>
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Side Panel */}
+                            <div className="w-full lg:w-96 flex flex-col gap-6 shrink-0 lg:sticky lg:top-6 self-start">
+                                
+                                {/* Daily Detail Card */}
+                                {selectedDay ? (
+                                    <div className="bg-white rounded-xl shadow-lg border border-blue-200 overflow-hidden animate-fade-in max-h-[40vh] overflow-y-auto custom-scrollbar">
+                                        <div className="bg-blue-600 text-white p-4 flex justify-between items-center sticky top-0 z-10">
+                                            <h3 className="font-bold flex items-center gap-2">
+                                                <Icons.Clock />
+                                                Resumo: {selectedDay}
+                                            </h3>
+                                            <button onClick={() => setSelectedDay(null)} className="text-blue-100 hover:text-white">
+                                                <Icons.XCircle />
+                                            </button>
+                                        </div>
+                                        <div className="p-4 space-y-4">
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 text-center">
+                                                    <div className="text-2xl font-bold text-emerald-600">{dayStats.preventiveCount}</div>
+                                                    <div className="text-xs text-emerald-800 font-medium">Em Preventiva</div>
+                                                </div>
+                                                <div className="bg-orange-50 p-3 rounded-lg border border-orange-100 text-center">
+                                                    <div className="text-2xl font-bold text-orange-600">{dayStats.correctiveCount}</div>
+                                                    <div className="text-xs text-orange-800 font-medium">Em Corretiva</div>
+                                                </div>
+                                                {(dayStats.cancelledCount > 0 || dayStats.partialCount > 0) && (
+                                                    <div className="col-span-2 bg-red-50 p-3 rounded-lg border border-red-100 text-center grid grid-cols-2 gap-2">
+                                                        <div>
+                                                             <div className="text-xl font-bold text-red-700">{dayStats.cancelledCount}</div>
+                                                             <div className="text-[10px] text-red-800 font-medium">Cancelados</div>
+                                                        </div>
+                                                        <div>
+                                                             <div className="text-xl font-bold text-yellow-600">{dayStats.partialCount}</div>
+                                                             <div className="text-[10px] text-yellow-800 font-medium">Impacto Parcial</div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            <div className="pt-2 border-t border-gray-100">
+                                                <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                                    <span className="text-emerald-500"><Icons.CheckCircle /></span>
+                                                    Executando Hoje (Ord. por ID):
+                                                </h4>
+                                                {dayStats.activeTasks.length > 0 ? (
+                                                    <ul className="space-y-3 pr-2">
+                                                        {dayStats.activeTasks.map((task, i) => (
+                                                            <li key={i} className="text-xs bg-gray-50 p-2 rounded border border-gray-100 hover:bg-white transition-colors">
+                                                                <div className="flex justify-between mb-1">
+                                                                    <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded">ID {task.id}</span>
+                                                                    <span className="text-gray-500 italic">{task.assignedTo}</span>
+                                                                </div>
+                                                                <div className="font-semibold text-gray-700">{task.asset}</div>
+                                                                <div className="text-gray-500 mt-1 mb-2">{task.desc}</div>
+                                                                
+                                                                <div className="flex gap-2 flex-wrap">
+                                                                    {task.mec && <ResourceBadge type="mec" text={task.mec} />}
+                                                                    {task.ele && <ResourceBadge type="ele" text={task.ele} />}
+                                                                    {task.aut && <ResourceBadge type="aut" text={task.aut} />}
+                                                                </div>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <p className="text-sm text-gray-400 italic">Nenhuma preventiva programada.</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white rounded-xl shadow p-6 border border-gray-100 text-center flex flex-col items-center justify-center min-h-[150px]">
+                                        <div className="text-blue-200 mb-3"><Icons.Info /></div>
+                                        <h3 className="text-lg font-bold text-gray-600">Selecione um dia</h3>
+                                        <p className="text-gray-400 text-sm mt-1">Clique nas datas acima para ver o resumo diário.</p>
+                                    </div>
+                                )}
+
+                                {/* Quick Reference Activity List */}
+                                <div className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden flex-1 flex flex-col max-h-[60vh]">
+                                    <div className="bg-gray-100 p-3 border-b border-gray-200 font-semibold text-gray-700 text-sm flex items-center gap-2 sticky top-0 z-10">
+                                        <Icons.Briefcase />
+                                        Catálogo de Atividades
+                                    </div>
+                                    <div className="overflow-y-auto p-2 custom-scrollbar flex-1">
+                                        <p className="text-xs text-gray-400 px-2 pb-2">Clique para destacar no mapa:</p>
+                                        {activities.map(act => (
+                                            <div 
+                                                key={act.id} 
+                                                onClick={() => toggleActivitySelection(act.id)}
+                                                className={`
+                                                    p-2 mb-2 rounded border cursor-pointer transition-all 
+                                                    ${selectedActivityId === act.id 
+                                                        ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-200 shadow-md' 
+                                                        : hoveredTask === act.id 
+                                                        ? 'bg-yellow-50 border-yellow-300' 
+                                                        : 'bg-white border-gray-100 hover:border-gray-300 hover:shadow-sm'
+                                                    }
+                                                `}
+                                            >
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition-colors ${selectedActivityId === act.id ? 'bg-blue-600 text-white' : 'bg-slate-700 text-white'}`}>
+                                                        ID {act.id}
+                                                    </span>
+                                                    <span className="text-xs font-bold text-gray-700 truncate">{act.asset}</span>
+                                                    {act.desc.includes('Backlog') && <span className="text-[9px] bg-red-100 text-red-600 px-1 rounded border border-red-200 ml-auto">Backlog</span>}
+                                                </div>
+                                                <p className="text-[11px] text-gray-500 leading-tight mb-2">{act.desc}</p>
+                                                
+                                                <div className="flex gap-1 flex-wrap mb-2">
+                                                    {act.mec && <ResourceBadge type="mec" text={act.mec} />}
+                                                    {act.ele && <ResourceBadge type="ele" text={act.ele} />}
+                                                    {act.aut && <ResourceBadge type="aut" text={act.aut} />}
+                                                </div>
+
+                                                <div className="flex justify-end">
+                                                    {activityStatus[act.id] === 'impacto' && (
+                                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700 border border-red-200">
+                                                            Impacto
+                                                        </span>
+                                                    )}
+                                                    {activityStatus[act.id] === 'concluir' && (
+                                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                                            Concluir
+                                                        </span>
+                                                    )}
+                                                    {activityStatus[act.id] === 'nao-programado' && (
+                                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
+                                                            Não Programado
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

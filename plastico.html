@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa de Atuação Preventiva</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel para JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Fontes -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-rajdhani { font-family: 'Rajdhani', sans-serif; }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+
+        // --- ICONS (Reimplemented as simple SVG components to avoid external dependency issues) ---
+        const IconBase = ({ children, size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+
+        const Activity = (props) => <IconBase {...props}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></IconBase>;
+        const Calendar = (props) => <IconBase {...props}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></IconBase>;
+        const User = (props) => <IconBase {...props}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></IconBase>;
+        const Filter = (props) => <IconBase {...props}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></IconBase>;
+        const Info = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></IconBase>;
+        const CheckCircle = (props) => <IconBase {...props}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconBase>;
+        const X = (props) => <IconBase {...props}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></IconBase>;
+        const CalendarDays = (props) => <IconBase {...props}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></IconBase>;
+        const ChevronRight = (props) => <IconBase {...props}><path d="m9 18 6-6-6-6"/></IconBase>;
+        const GraduationCap = (props) => <IconBase {...props}><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></IconBase>;
+        const ArrowLeft = (props) => <IconBase {...props}><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></IconBase>;
+
+        // --- DATA CONSTANTS ---
+
+        const ACTIVITIES = {
+            1: { id: 1, machine: "INJETORA HIDR. SEMERARO 1100T - Nº 14", desc: "Preventiva anual: Backlog, vazamentos, trocador de calor, tubulação e filtragem.", time: "192h Mec / 8h Ele", class: "Crítico" },
+            2: { id: 2, machine: "MIRAMONDI", desc: "Troca de reparo cilindro, haste, cabos do encoder ST0401.", time: "128h Mec / 32h Ele", class: "Crítico" },
+            3: { id: 3, machine: "SILO", desc: "Travamento da porta (Pcar) e aquisição de aspirador.", time: "Terceiros", class: "Externo" },
+            4: { id: 4, machine: "INJETORA HIDR. HAITIAN 1850T - Nº 30", desc: "Preventiva anual (Parte elétrica).", time: "24h Mec / 24h Ele", class: "Normal" },
+            5: { id: 5, machine: "INJETORA HIDR. HAITIAN 1850T - Nº 25", desc: "Preventiva anual (Parte elétrica).", time: "16h Ele", class: "Rápido" }
+        };
+
+        const DATES = [
+            "20/12", "21/12", "22/12", "23/12", "24/12", "25/12", "26/12", "27/12", 
+            "28/12", "29/12", "30/12", "31/12", "01/01", "02/01", "03/01", "04/01"
+        ];
+
+        const TEAM_DATA = [
+            { name: "CAINA FELIPE CATOIA", shift: 1, schedule: ["Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Domingo"] },
+            { name: "MURILO HENRIQUE DOS SANTOS SIBIONI", shift: 1, schedule: ["1", "Domingo", "5 / treinamento", "4", "Corretiva", "Natal", "4", "2", "Domingo", "2", "2", "Corretiva", "Ano Novo", "Testes", "Retorno", "Domingo"] },
+            { name: "TIAGO FELIX DE SOUSA", shift: 1, schedule: ["Corretiva", "Domingo", "Corretiva", "Corretiva", "Corretiva", "Natal", "Corretiva", "2", "Domingo", "2", "2", "Corretiva", "Ano Novo", "Testes", "Retorno", "Domingo"] },
+            { name: "VINICIUS PICON LEME", shift: 1, schedule: ["Corretiva", "Domingo", "Folga 5x1", "Corretiva", "Corretiva", "Natal", "Corretiva", "Corretiva", "Domingo", "Corretiva", "Corretiva", "Corretiva", "Ano Novo", "Testes", "Retorno", "Domingo"] },
+            { name: "PAOLO SERGIO MASSONI", shift: 1, schedule: ["1", "Domingo", "1 / Treinamento", "1", "Corretiva", "Natal", "1", "2", "Domingo", "2", "2", "Corretiva", "Ano Novo", "Testes", "Retorno", "Domingo"] },
+            { name: "RODRIGO BONI DA SILVA", shift: 1, schedule: ["Corretiva", "Domingo", "Corretiva", "Folga 5x1", "Corretiva", "Natal", "Corretiva", "Corretiva", "Domingo", "Folga 5x1", "Corretiva", "Corretiva", "Ano Novo", "Testes", "Folga 5x1", "Domingo"] },
+            { name: "CEZAR APARECIDO DOS SANTOS", shift: 1, schedule: ["Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Retorno"] },
+            { name: "JOÃO ROBERTO SANTOS MOREIRA", shift: 2, schedule: ["5", "Domingo", "Folga 5x1", "4", "Corretiva", "Natal", "4", "2", "Folga 5x1", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Domingo"] },
+            { name: "VINICIUS NEPOMUCENO DE FREITAS", shift: 2, schedule: ["Corretiva", "Domingo", "Corretiva", "Corretiva", "Corretiva", "Natal", "Corretiva", "Corretiva", "Domingo", "Corretiva", "Corretiva", "Corretiva", "Ano Novo", "Testes", "Retorno", "Domingo"] },
+            { name: "VINICIUS RODRIGUES PEREIRA", shift: 2, schedule: ["4", "Domingo", "5 / treinamento", "4", "Corretiva", "Natal", "4", "2", "Domingo", "2", "2", "Corretiva", "Ano Novo", "Testes", "Retorno", "Domingo"] },
+            { name: "CLAUDIO ROBERTO MAZZARI", shift: 2, schedule: ["1", "Domingo", "1 / Treinamento", "1", "Corretiva", "Natal", "1", "2", "Domingo", "2", "2", "Corretiva", "Ano Novo", "Testes", "Retorno", "Domingo"] },
+            { name: "DENILSON DO CARMO", shift: 2, schedule: ["1", "Domingo", "1 / Treinamento", "1", "Corretiva", "Natal", "1", "2", "Domingo", "2", "2", "Corretiva", "Ano Novo", "Testes", "Retorno", "Domingo"] },
+            { name: "LUCIO SILVEIRA DIAS", shift: 3, schedule: ["Folga", "Corretiva", "Corretiva", "Corretiva", "Folga", "Natal", "Corretiva", "Folga", "Corretiva", "Corretiva", "Corretiva", "Folga", "Ano Novo", "Corretiva", "Corretiva", "Retorno"] },
+            { name: "EDEMILSON DOS SANTOS", shift: 3, schedule: ["Folga", "1", "1 / Treinamento", "1", "Folga", "Natal", "1", "Folga", "4", "4", "4", "Folga", "Ano Novo", "Testes", "Folga", "Retorno"] },
+            { name: "FERNANDO SANTOS MOREIRA", shift: 3, schedule: ["Folga", "1", "1 / Treinamento", "1", "Folga", "Natal", "1", "Folga", "4", "4", "4", "Folga", "Ano Novo", "Testes", "Folga", "Retorno"] },
+            { name: "WAGNER DAUN", shift: 3, schedule: ["Folga", "Corretiva", "Corretiva", "Corretiva", "Folga", "Natal", "Corretiva", "Folga", "Corretiva", "Corretiva", "Corretiva", "Folga", "Ano Novo", "Corretiva", "Corretiva", "Retorno"] },
+        ];
+
+        // --- COMPONENT ---
+
+        function MaintenanceDashboard() {
+            const [filterShift, setFilterShift] = useState('ALL'); 
+            const [selectedDateIndex, setSelectedDateIndex] = useState(null); 
+            const [hoveredActivity, setHoveredActivity] = useState(null);
+            const [highlightedActivity, setHighlightedActivity] = useState(null); 
+
+            // --- HELPERS ---
+
+            const getStatusType = (status) => {
+                const num = parseInt(status);
+                if (!isNaN(num)) return 'PREVENTIVA';
+                
+                const s = status.toLowerCase();
+                if (s.includes('corretiva')) return 'CORRETIVA';
+                if (s.includes('testes') || s.includes('treinamento')) return 'TREINAMENTO';
+                if (s.includes('férias') || s.includes('folga') || s.includes('domingo')) return 'FOLGA';
+                if (s.includes('natal') || s.includes('ano novo')) return 'FERIADO';
+                if (s.includes('retorno')) return 'RETORNO';
+                return 'OUTROS';
+            };
+
+            const getCellStyle = (status) => {
+                const type = getStatusType(status);
+                const isId = !isNaN(parseInt(status));
+                
+                const isDimmed = highlightedActivity && (!isId || parseInt(status) !== highlightedActivity);
+                const isHighlighted = highlightedActivity && isId && parseInt(status) === highlightedActivity;
+
+                let baseClasses = `flex items-center justify-center font-bold text-sm h-10 w-full transition-all duration-300 border border-slate-200 relative overflow-hidden
+                    ${isDimmed ? 'opacity-20 grayscale' : 'opacity-100'} 
+                    ${isHighlighted ? 'ring-2 ring-offset-2 ring-indigo-500 z-10 scale-105' : ''} 
+                `;
+
+                switch (type) {
+                case 'PREVENTIVA':
+                    return baseClasses + "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200 cursor-pointer shadow-sm";
+                case 'CORRETIVA':
+                    return baseClasses + "bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-200 cursor-default";
+                case 'TREINAMENTO':
+                    return baseClasses + "bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200 cursor-default";
+                case 'FOLGA':
+                    return baseClasses + "bg-slate-100 text-slate-400 opacity-70";
+                case 'FERIADO':
+                    return baseClasses + "bg-purple-100 text-purple-800 font-medium border-purple-200";
+                case 'RETORNO':
+                    return baseClasses + "bg-indigo-100 text-indigo-700 border-indigo-200";
+                default:
+                    return baseClasses + "bg-slate-50 text-slate-500";
+                }
+            };
+
+            const renderCellContent = (status) => {
+                if (status.toString().includes('/') || (status.toLowerCase().includes('treinamento') && !isNaN(parseInt(status)))) {
+                    const id = parseInt(status);
+                    return (
+                        <div className="flex flex-col items-center justify-center leading-none">
+                            <span>{id}</span>
+                            <div className="flex items-center gap-0.5 mt-0.5 text-[10px] uppercase tracking-tighter opacity-80">
+                                <GraduationCap size={10} />
+                                Treino
+                            </div>
+                        </div>
+                    );
+                }
+                if (status === "Corretiva") return "Corr";
+                return status;
+            };
+
+            // --- FILTERING ---
+
+            const filteredTeam = useMemo(() => {
+                if (filterShift === 'ALL') return TEAM_DATA;
+                return TEAM_DATA.filter(t => t.shift === parseInt(filterShift));
+            }, [filterShift]);
+
+            // --- STATS FOR SELECTED DATE ---
+
+            const dailyStats = useMemo(() => {
+                if (selectedDateIndex === null) return null;
+
+                let stats = {
+                    preventive: 0,
+                    corrective: 0,
+                    folga: 0,
+                    total: 0,
+                    training: 0,
+                    tasks: [] 
+                };
+
+                const addedTaskIds = new Set();
+
+                filteredTeam.forEach(member => {
+                    const status = member.schedule[selectedDateIndex];
+                    const type = getStatusType(status);
+                    
+                    stats.total++;
+
+                    if (status.toString().toLowerCase().includes('treinamento') || type === 'TREINAMENTO') {
+                        stats.training++;
+                    }
+
+                    if (type === 'PREVENTIVA') {
+                        stats.preventive++;
+                        const id = parseInt(status);
+                        if (!addedTaskIds.has(id)) {
+                        addedTaskIds.add(id);
+                        stats.tasks.push({
+                            id: id,
+                            asset: ACTIVITIES[id]?.machine || "Desconhecido",
+                            class: ACTIVITIES[id]?.class || "Normal"
+                        });
+                        }
+                    } else if (type === 'CORRETIVA') {
+                        stats.corrective++;
+                    } else if (type === 'FOLGA' || type === 'FERIADO') {
+                        stats.folga++;
+                    }
+                });
+
+                stats.tasks.sort((a, b) => a.id - b.id);
+                return stats;
+            }, [selectedDateIndex, filteredTeam]);
+
+            const selectedDateLabel = selectedDateIndex !== null ? DATES[selectedDateIndex] : null;
+
+            return (
+                <div className="flex flex-col h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
+                
+                {/* HEADER */}
+                <header className="flex-none bg-white border-b border-slate-200 p-4 shadow-sm z-20">
+                    <div className="flex justify-between items-center max-w-full mx-auto">
+                    <div className="flex items-center gap-3">
+                        <a href="index.html" className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-indigo-600 transition-colors mr-2" aria-label="Voltar ao Menu" title="Voltar ao Menu">
+                            <ArrowLeft size={20} />
+                        </a>
+                        <div className="bg-indigo-600 p-2 rounded-lg text-white shadow-lg shadow-indigo-200">
+                        <Activity size={24} />
+                        </div>
+                        <div>
+                        <h1 className="text-xl font-bold text-slate-900 tracking-wide uppercase font-rajdhani">Mapa de Atuação Preventiva</h1>
+                        <p className="text-xs text-slate-500">Dashboard Interativo de Manutenção</p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                        <span className="text-sm font-semibold text-slate-500 px-3 flex items-center gap-2">
+                        <Filter size={14} /> Filtro:
+                        </span>
+                        {['ALL', 1, 2, 3].map(shift => (
+                        <button
+                            key={shift}
+                            onClick={() => setFilterShift(shift)}
+                            className={`px-4 py-1.5 rounded text-sm font-bold transition-all shadow-sm ${
+                            filterShift === shift 
+                                ? 'bg-white text-indigo-600 shadow-md ring-1 ring-slate-200' 
+                                : 'bg-transparent text-slate-400 hover:text-slate-700 hover:bg-slate-200'
+                            }`}
+                        >
+                            {shift === 'ALL' ? 'Todos' : `T${shift}`}
+                        </button>
+                        ))}
+                    </div>
+                    </div>
+                </header>
+
+                <div className="flex flex-grow overflow-hidden">
+                    
+                    {/* MAIN GANTT AREA */}
+                    <main className="flex-grow flex flex-col overflow-hidden relative">
+                    
+                    {/* Scrollable Container */}
+                    <div className="flex-grow overflow-auto custom-scrollbar bg-slate-50">
+                        <div className="inline-block min-w-full">
+                        
+                        {/* Table Header */}
+                        <div className="sticky top-0 z-10 bg-white shadow-sm border-b border-slate-200 flex min-w-max">
+                            <div className="sticky left-0 w-64 bg-white border-r border-slate-200 p-3 flex items-center font-bold text-indigo-600 uppercase text-sm z-20">
+                            <User size={14} className="mr-2" /> Colaborador
+                            </div>
+                            <div className="w-16 flex-shrink-0 bg-slate-50 border-r border-slate-200 p-3 flex items-center justify-center font-bold text-slate-400 uppercase text-xs">
+                            Turno
+                            </div>
+                            {DATES.map((date, idx) => (
+                            <div 
+                                key={date}
+                                onClick={() => setSelectedDateIndex(idx)}
+                                className={`w-24 flex-shrink-0 p-2 flex flex-col items-center justify-center border-r border-slate-200 cursor-pointer transition-colors group
+                                ${selectedDateIndex === idx ? 'bg-indigo-50 border-b-2 border-b-indigo-500' : 'hover:bg-slate-100'}
+                                `}
+                            >
+                                <span className={`text-sm font-bold ${selectedDateIndex === idx ? 'text-indigo-700' : 'text-slate-500 group-hover:text-slate-800'}`}>
+                                {date}
+                                </span>
+                            </div>
+                            ))}
+                        </div>
+
+                        {/* Table Body */}
+                        <div className="min-w-max pb-20"> 
+                            {filteredTeam.map((member, rowIdx) => (
+                            <div key={`${member.name}-${rowIdx}`} className="flex border-b border-slate-200 hover:bg-slate-100 transition-colors">
+                                
+                                <div className="sticky left-0 w-64 flex-shrink-0 bg-white border-r border-slate-200 p-3 flex items-center text-sm font-medium text-slate-700 z-10 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]">
+                                <div className="truncate" title={member.name}>{member.name}</div>
+                                </div>
+                                
+                                <div className="w-16 flex-shrink-0 bg-slate-50 border-r border-slate-200 flex items-center justify-center text-xs font-bold text-slate-400">
+                                {member.shift}
+                                </div>
+
+                                {member.schedule.map((status, colIdx) => {
+                                const isSelected = selectedDateIndex === colIdx;
+                                const isId = !isNaN(parseInt(status));
+                                
+                                return (
+                                    <div 
+                                    key={colIdx} 
+                                    className={`w-24 flex-shrink-0 p-1 border-r border-slate-100 flex items-center justify-center relative
+                                        ${isSelected ? 'bg-indigo-50/50' : ''}
+                                    `}
+                                    >
+                                    <div 
+                                        className={`${getCellStyle(status)} rounded relative group`}
+                                        onMouseEnter={() => isId ? setHoveredActivity(status) : null}
+                                        onMouseLeave={() => setHoveredActivity(null)}
+                                        onClick={() => {
+                                            if(isId) {
+                                                setHighlightedActivity(highlightedActivity === parseInt(status) ? null : parseInt(status));
+                                            }
+                                        }}
+                                    >
+                                        {renderCellContent(status)}
+                                        
+                                        {isId && (
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 bg-slate-800 text-white text-xs p-3 rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                            <div className="font-bold text-emerald-400 mb-1 flex items-center gap-1 text-sm">
+                                            <Info size={14} /> ID {parseInt(status)}: {ACTIVITIES[parseInt(status)]?.machine}
+                                            </div>
+                                            <div className="text-slate-300 leading-tight mb-2">
+                                            {ACTIVITIES[parseInt(status)]?.desc}
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <span className="bg-slate-700 px-2 py-0.5 rounded text-[10px]">{ACTIVITIES[parseInt(status)]?.time}</span>
+                                                {status.toString().toLowerCase().includes('treinamento') && (
+                                                    <span className="bg-blue-600 px-2 py-0.5 rounded text-[10px] flex items-center gap-1"><GraduationCap size={10}/> Treinamento</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        )}
+                                    </div>
+                                    </div>
+                                );
+                                })}
+                            </div>
+                            ))}
+                        </div>
+                        </div>
+                    </div>
+                    </main>
+
+                    {/* RIGHT SIDEBAR (SUMMARY) */}
+                    <aside className="w-96 flex-none bg-white border-l border-slate-200 flex flex-col shadow-xl z-30">
+                    
+                    {/* TOP HALF */}
+                    <div className="flex-none max-h-[50%] overflow-y-auto border-b border-slate-200 custom-scrollbar">
+                        {selectedDateLabel ? (
+                            <>
+                            <div className="p-4 bg-indigo-600 text-white sticky top-0 z-10 shadow-md">
+                                <div className="flex justify-between items-center mb-1">
+                                    <h2 className="font-bold text-lg flex items-center gap-2">
+                                    <CalendarDays className="w-5 h-5" />
+                                    {selectedDateLabel}
+                                    </h2>
+                                    <button onClick={() => setSelectedDateIndex(null)} className="hover:bg-indigo-500 p-1 rounded transition-colors">
+                                    <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+                                <p className="text-indigo-100 text-xs">Resumo Diário de Operações</p>
+                            </div>
+                            
+                            <div className="p-4 space-y-6">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+                                        <div className="text-emerald-800 text-xs font-bold uppercase mb-1">Preventiva</div>
+                                        <div className="text-3xl font-bold text-emerald-600">{dailyStats.preventive}</div>
+                                    </div>
+                                    <div className="bg-orange-50 p-3 rounded-lg border border-orange-100">
+                                        <div className="text-orange-800 text-xs font-bold uppercase mb-1">Corretiva</div>
+                                        <div className="text-3xl font-bold text-orange-600">{dailyStats.corrective}</div>
+                                    </div>
+                                </div>
+
+                                {dailyStats.training > 0 && (
+                                    <div className="bg-blue-50 p-2 rounded-lg border border-blue-100 flex items-center justify-between px-3">
+                                        <span className="text-xs font-bold text-blue-800 uppercase flex items-center gap-1"><GraduationCap size={12}/> Em Treinamento</span>
+                                        <span className="text-lg font-bold text-blue-600">{dailyStats.training}</span>
+                                    </div>
+                                )}
+                                
+                                <div>
+                                    <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2 border-b border-slate-100 pb-2">
+                                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                    IDs em Atuação
+                                    </h3>
+                                    {dailyStats.tasks.length > 0 ? (
+                                    <ul className="space-y-2">
+                                        {dailyStats.tasks.map(task => (
+                                        <li key={task.id} 
+                                            className={`text-xs p-3 rounded border cursor-pointer transition-all duration-200 flex justify-between items-center group
+                                                ${highlightedActivity === task.id 
+                                                    ? 'bg-yellow-50 border-yellow-400 shadow-sm scale-[1.02]' 
+                                                    : 'bg-slate-50 border-slate-100 hover:bg-white hover:border-indigo-200 hover:shadow-sm'
+                                                }`}
+                                            onClick={() => setHighlightedActivity(task.id === highlightedActivity ? null : task.id)}
+                                        >
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="font-bold text-slate-800 text-sm bg-white border border-slate-200 px-1.5 rounded">ID {task.id}</span>
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${task.class === 'Crítico' ? 'bg-red-100 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                                                        {task.class}
+                                                    </span>
+                                                </div>
+                                                <div className="text-slate-500 leading-tight">{task.asset}</div>
+                                            </div>
+                                            <ChevronRight className={`w-4 h-4 text-slate-300 group-hover:text-indigo-400 transition-colors ${highlightedActivity === task.id ? 'text-yellow-600' : ''}`} />
+                                        </li>
+                                        ))}
+                                    </ul>
+                                    ) : (
+                                    <div className="text-center py-4 bg-slate-50 rounded border border-dashed border-slate-200">
+                                        <p className="text-xs text-slate-400 italic">Nenhuma preventiva programada.</p>
+                                    </div>
+                                    )}
+                                </div>
+                            </div>
+                            </>
+                        ) : (
+                            <div className="p-6 text-center text-slate-400 bg-slate-50 h-full flex flex-col items-center justify-center min-h-[300px]">
+                                <div className="bg-white p-4 rounded-full shadow-sm mb-4 border border-slate-100">
+                                <Calendar className="w-8 h-8 text-indigo-200" />
+                                </div>
+                                <h3 className="text-slate-600 font-bold mb-2">Painel de Resumo</h3>
+                                <p className="text-sm max-w-[200px]">Clique em uma data no cabeçalho (ex: 24/12) para ver detalhes.</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* BOTTOM HALF */}
+                    <div className="flex-grow overflow-auto p-4 bg-slate-50/50 flex flex-col">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
+                        <Info size={12} /> Catálogo de Atividades
+                        </h3>
+                        
+                        <div className="space-y-3 mb-6">
+                        {Object.values(ACTIVITIES).map((act) => (
+                            <div 
+                            key={act.id} 
+                            onClick={() => setHighlightedActivity(highlightedActivity === act.id ? null : act.id)}
+                            className={`text-sm p-3 rounded-lg border cursor-pointer transition-all duration-300
+                                ${highlightedActivity === act.id 
+                                ? 'bg-white border-indigo-500 shadow-md ring-1 ring-indigo-500 scale-[1.02]' 
+                                : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-sm text-slate-400'}
+                            `}
+                            >
+                            <div className="flex items-start gap-3">
+                                <div className={`flex-none w-6 h-6 rounded flex items-center justify-center font-bold text-xs mt-0.5 transition-colors
+                                    ${highlightedActivity === act.id ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}
+                                `}>
+                                {act.id}
+                                </div>
+                                <div>
+                                <div className={`font-bold leading-tight mb-1 ${highlightedActivity === act.id ? 'text-slate-800' : 'text-slate-500'}`}>
+                                    {act.machine}
+                                </div>
+                                <div className="text-xs text-slate-400 leading-relaxed line-clamp-2">{act.desc}</div>
+                                </div>
+                            </div>
+                            </div>
+                        ))}
+                        </div>
+
+                        {/* LEGEND SECTION */}
+                        <div className="mt-auto pt-4 border-t border-slate-200">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase mb-3">Legenda de Status</h3>
+                            <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
+                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-200 border border-emerald-400 rounded"></div> Preventiva (ID)</div>
+                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-orange-200 border border-orange-400 rounded"></div> Corretiva</div>
+                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-blue-200 border border-blue-400 rounded"></div> Treinamento</div>
+                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-slate-200 border border-slate-300 rounded"></div> Folga/Domingo</div>
+                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-purple-200 border border-purple-400 rounded"></div> Feriado</div>
+                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-indigo-200 border border-indigo-400 rounded"></div> Retorno</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    </aside>
+                </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<MaintenanceDashboard />);
+    </script>
+</body>
+</html>

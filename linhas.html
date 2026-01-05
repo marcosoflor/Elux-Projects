@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa Interativo de Atuação Preventiva</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+        
+        .fade-in { animation: fadeIn 0.2s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .pulsing { animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse-ring { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+
+        /* Modal Styles */
+        .modal-open { overflow: hidden; }
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="flex-none bg-white p-4 border-b border-slate-200 shadow-sm z-20">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <a href="index.html" class="bg-slate-100 hover:bg-slate-200 p-2 rounded-lg text-slate-600 transition-colors" title="Voltar ao Menu">
+                    <i data-lucide="arrow-left" class="w-6 h-6"></i>
+                </a>
+                
+                <!-- Botão de Impactos -->
+                <button onclick="openImpactModal()" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors animate-pulse font-bold text-sm shadow-sm">
+                    <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                    Relatório de Impactos
+                </button>
+
+                <div class="bg-blue-600 p-2 rounded-lg text-white ml-2">
+                    <i data-lucide="settings" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-slate-800">Mapa Interativo</h1>
+                    <p class="text-slate-500 text-xs">Atualizado: Nova Configuração de Calendário</p>
+                </div>
+            </div>
+            
+            <div class="flex gap-2">
+                <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                    <i data-lucide="filter" class="w-4 h-4 text-slate-500"></i>
+                    <select id="filterShift" class="bg-transparent text-sm font-semibold focus:outline-none text-slate-700 cursor-pointer">
+                        <option value="Todos">Todos Turnos</option>
+                        <option value="1">Turno 1</option>
+                        <option value="2">Turno 2</option>
+                        <option value="3">Turno 3</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                    <i data-lucide="users" class="w-4 h-4 text-slate-500"></i>
+                    <select id="filterRole" class="bg-transparent text-sm font-semibold focus:outline-none text-slate-700 cursor-pointer">
+                        <option value="Todos">Todas Áreas</option>
+                        <option value="Mecânica">Mecânica</option>
+                        <option value="Elétrica">Elétrica</option>
+                        <option value="Automação">Automação</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="flex flex-1 overflow-hidden">
+        
+        <!-- Left: Gantt Chart -->
+        <div class="flex-1 overflow-auto bg-slate-50 p-4 custom-scrollbar relative" id="mainContainer">
+            
+            <!-- Legend -->
+            <div class="flex flex-wrap gap-4 mb-4 bg-white p-2 rounded-lg border border-slate-200 shadow-sm sticky left-0 z-30">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider self-center mr-2">Legenda:</span>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded bg-emerald-500 shadow-sm"></span>
+                    <span class="text-xs font-medium text-slate-700">Preventiva</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded bg-orange-500 shadow-sm"></span>
+                    <span class="text-xs font-medium text-slate-700">Corretiva</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded bg-blue-500 shadow-sm"></span>
+                    <span class="text-xs font-medium text-slate-700">Treino</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded bg-red-100 border border-red-200 text-red-700"></span>
+                    <span class="text-xs font-medium text-slate-700">Banco/Férias</span>
+                </div>
+                
+                <div id="highlightIndicator" class="hidden flex items-center gap-1.5 ml-4 pulsing">
+                    <span class="w-3 h-3 rounded-full bg-yellow-400 border border-yellow-600 shadow-sm"></span>
+                    <span class="text-xs font-bold text-yellow-700" id="highlightText">Destacando ID #</span>
+                    <button onclick="clearHighlight()" class="ml-1 text-slate-400 hover:text-red-500">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <table class="w-full border-collapse min-w-[1000px] bg-white rounded-lg shadow-sm overflow-hidden mb-20">
+                <thead class="bg-slate-100">
+                    <tr id="headerRow"></tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Right: Sidebar -->
+        <div class="w-80 bg-white border-l border-slate-200 shadow-xl flex flex-col z-30 transition-all duration-300 h-full flex-none">
+            <div class="flex-none max-h-[50%] overflow-y-auto border-b border-slate-200 custom-scrollbar" id="summaryContainer">
+                <div class="p-6 text-center text-slate-400 bg-slate-50 h-full flex flex-col items-center justify-center min-h-[250px]">
+                    <div class="bg-white p-4 rounded-full shadow-sm mb-4">
+                        <i data-lucide="calendar" class="w-8 h-8 text-indigo-300"></i>
+                    </div>
+                    <h3 class="text-slate-600 font-bold mb-2">Painel de Resumo</h3>
+                    <p class="text-sm">Clique em uma data no cabeçalho para ver estatísticas.</p>
+                </div>
+            </div>
+
+            <div class="flex-1 flex flex-col overflow-hidden bg-white">
+                <div class="p-3 bg-slate-100 border-b border-slate-200 flex justify-between items-center sticky top-0 z-10">
+                    <h4 class="font-bold text-xs text-slate-700 flex items-center gap-2">
+                        <i data-lucide="search" class="w-3 h-3"></i>
+                        Catálogo de Atividades
+                    </h4>
+                    <button id="clearHighlightBtn" onclick="clearHighlight()" class="hidden text-[10px] text-red-500 hover:underline">Limpar</button>
+                </div>
+                <!-- Catalog Legend -->
+                <div class="px-3 py-2 bg-slate-50 border-b border-slate-100 text-[10px] text-slate-500 flex gap-3">
+                    <div class="flex items-center gap-1">
+                        <div class="w-2 h-2 border border-slate-300 bg-white rounded"></div>
+                        <span>Programado</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <div class="w-2 h-2 border border-red-300 border-dashed bg-red-50 rounded"></div>
+                        <span>Não Programado</span>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2 bg-slate-50" id="catalogList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Impact Modal -->
+    <div id="impactModal" class="fixed inset-0 z-50 hidden">
+        <div class="modal-overlay absolute inset-0" onclick="closeImpactModal()"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col border border-slate-200">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i data-lucide="clipboard-list" class="w-5 h-5 text-indigo-600"></i>
+                        Detalhamento de Impactos
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-1">Análise de serviços afetados por indisponibilidade.</p>
+                </div>
+                <button onclick="closeImpactModal()" class="text-slate-400 hover:text-slate-600 p-1">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <div class="px-4 py-3 bg-slate-50 border-b border-slate-100 flex gap-6 text-xs font-semibold">
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded-sm border border-red-200 bg-red-100"></div>
+                    <span class="text-slate-700">Não Executado</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded-sm border border-yellow-200 bg-yellow-100"></div>
+                    <span class="text-slate-700">Impacto Parcial (Continuidade)</span>
+                </div>
+            </div>
+
+            <div class="p-4 overflow-y-auto custom-scrollbar flex-1 bg-white" id="impactList">
+                <!-- Impacts injected here -->
+            </div>
+            <div class="p-4 border-t border-slate-200 bg-white rounded-b-xl flex justify-end">
+                <button onclick="closeImpactModal()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-700">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="globalTooltip" class="fixed z-50 pointer-events-none hidden" style="transform: translate(-50%, -100%) translateY(-10px);">
+        <div class="bg-slate-800 text-white p-3 rounded-xl shadow-2xl w-60 border border-slate-600 fade-in">
+            <div class="flex justify-between items-center mb-2 border-b border-slate-700 pb-1">
+                <span class="font-mono text-emerald-400 text-xs" id="ttId">ID #</span>
+                <span class="text-[9px] px-1.5 rounded uppercase font-bold" id="ttClass"></span>
+            </div>
+            <div class="mb-2">
+                <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Ativo</div>
+                <div class="font-bold text-sm text-white leading-tight" id="ttAsset"></div>
+            </div>
+            <div class="mb-2">
+                <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Atividade</div>
+                <div class="text-xs text-slate-300 leading-snug" id="ttTask"></div>
+            </div>
+            <div class="mb-2 border-t border-slate-700 pt-1">
+                <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">OM</div>
+                <div class="text-xs text-yellow-400 font-mono" id="ttOm"></div>
+            </div>
+            <div class="mt-2 text-[10px] text-slate-400 grid grid-cols-3 gap-2 border-t border-slate-700 pt-2">
+                <div>Mec: <span class="text-white" id="ttMec"></span></div>
+                <div>Ele: <span class="text-white" id="ttEle"></span></div>
+                <div>Aut: <span class="text-white" id="ttAut"></span></div>
+            </div>
+            <div class="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-800"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA ---
+        const ACTIVITIES = [
+            { id: 1, asset: "EMBALADORA PROJPEACK L1", task: "Troca da esteira completa do túnel da embaladora.", om: "177393", class: "Crítico", mec: "32h", ele: "0", aut: "0" },
+            { id: 2, asset: "509645 - DISPOSITIVO DE ENCHIMENTO L2", task: "Preventiva Anual - Backlog.", om: "162679", class: "Backlog", mec: "4h", ele: "4h", aut: "0" },
+            { id: 3, asset: "EMBALADORA PROJPACK L2", task: "Revisão geral e troca de Celeron.", om: "177560", class: "Normal", mec: "16h", ele: "0", aut: "0" },
+            { id: 4, asset: "19664/3-Teste funcional L2", task: "Verificação e troca de barramentos.", om: "180885", class: "Normal", mec: "0", ele: "8h", aut: "0" },
+            { id: 5, asset: "Bomba de vácuo L2", task: "Realizar revisão nos sistema de vácuo.", om: "180886", class: "Normal", mec: "4h", ele: "0", aut: "0" },
+            { id: 6, asset: "19664/1-Teste motoca L2", task: "Revisão geral mecânica e elétrica.", om: "180887", class: "Normal", mec: "4h", ele: "0", aut: "0" },
+            { id: 7, asset: "510169.58-Elevador de topo L3", task: "Realizar verificação dos trilhos, verificar base.", om: "180888", class: "Crítico", mec: "8h", ele: "0", aut: "0" },
+            { id: 8, asset: "510891 - CÉLULA ROBÓTICA L3", task: "Troca da válvula estabilizadora.", om: "180889", class: "Normal", mec: "4h", ele: "0", aut: "0" },
+            { id: 9, asset: "510169/6-Manipulador de base L3", task: "Verificar garras e conjunto mecânicos.", om: "180890", class: "Normal", mec: "4h", ele: "0", aut: "0" },
+            { id: 10, asset: "Gangorra", task: "Realizar a troca do componente. E Realiza a revisão do conjunto usado.", om: "180891", class: "Crítico", mec: "8h", ele: "0", aut: "0" },
+            { id: 11, asset: "EMBALADORA MÁQUINAPACK L3", task: "Realizar verificação dos componentes.", om: "177561", class: "Crítico", mec: "16h", ele: "0", aut: "0" },
+            { id: 12, asset: "451878-Parafusamento do pézinho L3", task: "Verificação de componentes e melhoria de lógica.", om: "168915", class: "Crítico", mec: "8h", ele: "0", aut: "0" },
+            { id: 13, asset: "Mezanino L3", task: "Troca de correntes e revisão nos giradores.", om: "180893", class: "Crítico", mec: "40h", ele: "0", aut: "0" },
+            { id: 14, asset: "510313/8 - TESTE FUNC. Nº 01 L4", task: "Preventiva Anual - Backlog.", om: "157453", class: "Backlog", mec: "2h", ele: "0", aut: "0" },
+            { id: 15, asset: "510425 - TESTE FUNC. Nº 02 L4", task: "Preventiva Anual - Backlog.", om: "157454", class: "Backlog", mec: "2h", ele: "0", aut: "0" },
+            { id: 16, asset: "510607 - TESTE FUNC. Nº 03 L4", task: "Preventiva Anual - Backlog.", om: "157455", class: "Backlog", mec: "2h", ele: "0", aut: "0" },
+            { id: 17, asset: "510424 - TESTE FUNC. Nº 04 L4", task: "Preventiva Anual - Backlog.", om: "162112", class: "Backlog", mec: "2h", ele: "0", aut: "0" },
+            { id: 18, asset: "Teste funcional (2 piores) L4", task: "Troca de correia p/ sist. de engrenagem e corrente.", om: "180894", class: "Melhoria", mec: "80h", ele: "0", aut: "0" },
+            { id: 19, asset: "Esteira talisca pós transf. L4", task: "Verificar desgaste corrente, eixos, engren. e perfil.", om: "180895", class: "Normal", mec: "32h", ele: "0", aut: "0" },
+            { id: 20, asset: "510313/5-Esteira de talisca 2 L4", task: "Revisão nos componentes mecânicos da esteira.", om: "180896", class: "Normal", mec: "32h", ele: "0", aut: "0" },
+            { id: 21, asset: "Girador pré elevador L4", task: "Limpeza, verificação dos componentes elétricos", om: "180898", class: "Melhoria", mec: "0", ele: "16h", aut: "0" },
+            { id: 22, asset: "451485/03-Elevador final L4", task: "Limpeza, verificação dos componentes.", om: "180899", class: "Normal", mec: "8h", ele: "0", aut: "0" },
+            { id: 23, asset: "512655/02-Célula parafusamento cavid. L4", task: "Verificar componentes elevadores entrada/retorno.", om: "180900", class: "Normal", mec: "8h", ele: "0", aut: "0" },
+            { id: 24, asset: "510313-Esteira de montagem mesa L4", task: "Verificação dos elevadores e componentes da esteira.", om: "180901", class: "Normal", mec: "32h", ele: "0", aut: "0" },
+            { id: 25, asset: "Time 1 - L4", task: "Individualizar botões emergência (CLP/Prog).", om: "141364", class: "Segurança", mec: "0", ele: "48h", aut: "8h" },
+            { id: 26, asset: "452099-Célula de colagem de painel L5", task: "Troca da base da garra do robô da célula de painel.", om: "180902", class: "Crítico", mec: "32h", ele: "4h", aut: "16h" },
+            { id: 27, asset: "Esteira de roletes teste de estanqueidade L4", task: "Seccionar esteira e realizar instalação de stoppers", om: "180903", class: "Crítico", mec: "16h", ele: "4h", aut: "4h" },
+            { id: 28, asset: "512178-Projepack DPA (Pré Tunel)", task: "Verificar roletes da dorsal pré Tunel.", om: "180904", class: "Normal", mec: "16h", ele: "0", aut: "0" },
+            { id: 29, asset: "451771-IFA", task: "Troca das borrachas dos empilhadores.", om: "180906", class: "Normal", mec: "48h", ele: "0", aut: "0" },
+            { id: 30, asset: "451771-Esteira entrada DOCA manual", task: "Realizar tracionamento de roletes de entrada.", om: "180907", class: "Normal", mec: "16h", ele: "0", aut: "0" },
+            { id: 31, asset: "451771-Esteiras carregamento IFA", task: "Realizar lubrificação e verificação dos componentes.", om: "180909", class: "Normal", mec: "16h", ele: "0", aut: "0" },
+            { id: 32, asset: "451771-Systec velha", task: "Verificação componentes dos pentes de transferência.", om: "180910", class: "Normal", mec: "64h", ele: "0", aut: "0" },
+            { id: 33, asset: "510963/2 - ESTEIRA LIGAÇÃO L6", task: "Preventiva Anual - Backlog.", om: "177565", class: "Backlog", mec: "16h", ele: "0", aut: "0" },
+            { id: 34, asset: "508792-17 L4", task: "Preventiva limpeza painéis", om: "177589", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 35, asset: "511094 - L3", task: "Preventiva limpeza painéis", om: "177588", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 36, asset: "510891 - L3", task: "Preventiva limpeza painéis", om: "177587", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 37, asset: "510963/14 - L6", task: "Preventiva limpeza painéis", om: "177586", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 38, asset: "511015 - L6", task: "Preventiva limpeza painéis", om: "177585", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 39, asset: "512373 - L5", task: "Preventiva limpeza painéis", om: "177584", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 40, asset: "452099 - L5", task: "Preventiva limpeza painéis", om: "177583", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 41, asset: "452099 - L5", task: "Preventiva limpeza painéis", om: "177582", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 42, asset: "451919-5 - L5", task: "Preventiva limpeza painéis", om: "177581", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 43, asset: "451919-5 - L5", task: "Preventiva limpeza painéis", om: "177580", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 44, asset: "512178 - DPA", task: "Preventiva limpeza painéis", om: "177579", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 45, asset: "452159-803 - L5", task: "Preventiva limpeza painéis", om: "177578", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 46, asset: "452159-802 - L5", task: "Preventiva limpeza painéis", om: "177577", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 47, asset: "452159-801 - L5", task: "Preventiva limpeza painéis", om: "177576", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 48, asset: "511270 - L3", task: "Preventiva limpeza painéis", om: "177575", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 49, asset: "451878 - L3", task: "Preventiva limpeza painéis", om: "177574", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 50, asset: "451878 - L3", task: "Preventiva limpeza painéis", om: "177573", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 51, asset: "451878 - L3", task: "Preventiva limpeza painéis", om: "177572", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 52, asset: "510169-4 - L3", task: "Preventiva limpeza painéis", om: "177571", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 53, asset: "510169-3 - L3", task: "Preventiva limpeza painéis", om: "177570", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 54, asset: "510169-2 - L3", task: "Preventiva limpeza painéis", om: "177569", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 55, asset: "510169-1 - L3", task: "Preventiva limpeza painéis", om: "177568", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 56, asset: "509153/1 - L2", task: "Preventiva limpeza painéis", om: "177567", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 57, asset: "508378 - L1", task: "Preventiva limpeza painéis", om: "177566", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 58, asset: "452159-801 - L5", task: "Preventiva limpeza painéis", om: "156878", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 59, asset: "PARAFUSAMENTO CAVID. L4", task: "- Dry run do drive do manipulador - Validação dos drives - Criar sleep mode no motor - Individualização dos alarmes", om: "181088", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 60, asset: "célula de colagem de mesa", task: "criação de nova receita", om: "181089", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 61, asset: "DOCA", task: "Instalação de sensores a laser para carga/descarga da carreta", om: "S/N", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 62, asset: "803 / 804 - L3 / P1 / P2 / YOK", task: "Realizar a troca do inversor e validar o retirado em bancada.", om: "174416 / 174521 / 174522 / 175283 / 176204", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 63, asset: "Manipulador X e Y - L2", task: "Realizar a retirada do inversor da esteira de rolete", om: "S/N", class: "Normal", mec: "0", ele: "0", aut: "0" },
+            { id: 64, asset: "Teste funcional L2", task: "Reliazar a revisão das caixinhas do teste.", om: "181090", class: "Normal", mec: "0", ele: "0", aut: "0" },
+        ];
+
+        const SCHEDULE_DATES = [
+            "20/12", "21/12", "22/12", "23/12", "24/12", "25/12", "26/12", "27/12", 
+            "28/12", "29/12", "30/12", "31/12", "01/01", "02/01", "03/01", "04/01"
+        ];
+
+        const TEAM_DATA = [
+            { name: "ELTON DE JESUS MARQUES ORTIZ", role: "Automação", shift: 1, schedule: ["Folga", "Domingo", "2h. Treinamento / 59", "59", "Corretiva", "Natal", "Banco", "Folga", "Domingo", "59", "59", "Corretiva", "Ano Novo", "1", "Folga", "Domingo"] },
+            { name: "FLAVIO FERNANDO BORATO", role: "Automação", shift: 1, schedule: ["", "Domingo", "2h. Treinamento / Corretiva", "Corretiva", "Corretiva", "Natal", "Corretiva", "59", "Domingo", "Corretiva", "Corretiva", "Corretiva", "Ano Novo", "1", "1", "Domingo"] },
+            { name: "DIEGO APARECIDO DE LIMA", role: "Elétrica", shift: 1, schedule: ["", "Domingo", "2h. Treinamento / Corretiva", "Corretiva", "Corretiva", "Natal", "Corretiva", "59", "Domingo", "Corretiva", "Corretiva", "Corretiva", "Ano Novo", "1", "1", "Domingo"] },
+            { name: "MARCOS R. TORINI", role: "Elétrica", shift: 1, schedule: ["4", "Domingo", "2h. Treinamento / 7", "Corretiva", "Banco", "Natal", "Banco", "Banco", "Domingo", "64", "64", "Corretiva", "Ano Novo", "1", "1", "Domingo"] },
+            { name: "ANDERSON LUIZ SALA", role: "Mecânica", shift: 1, schedule: ["Banco", "Domingo", "2h. Treinamento / 27", "27", "Corretiva", "Natal", "Banco", "Banco", "Domingo", "18", "18", "Banco", "Ano Novo", "1", "1", "Domingo"] },
+            { name: "LEONARDO GOMES", role: "Mecânica", shift: 1, schedule: ["3", "Domingo", "2h. Treinamento / 3", "29", "Corretiva", "Natal", "18", "32", "Domingo", "31", "31", "Corretiva", "Ano Novo", "1", "31", "Domingo"] },
+            { name: "FERNANDO SEBASTIAO DE OLIVEIRA", role: "Mecânica", shift: 1, schedule: ["Banco", "Domingo", "2h. Treinamento / Corretiva", "Corretiva", "Corretiva", "Natal", "Corretiva", "32", "Domingo", "Corretiva", "Corretiva", "Corretiva", "Ano Novo", "1", "29", "Domingo"] },
+            { name: "RICARDO APARECIDO PAES", role: "Mecânica", shift: 1, schedule: ["24", "Domingo", "2h. Treinamento / 14 / 15 / 16 / 17", "29", "Corretiva", "Natal", "18", "32", "Domingo", "18", "18", "Corretiva", "Ano Novo", "1", "29", "Domingo"] },
+            { name: "SIDINEI DONIZETI MULLER", role: "Mecânica", shift: 1, schedule: ["3", "Domingo", "2h. Treinamento / 3", "5 / 6", "Corretiva", "Natal", "Banco", "32", "Domingo", "31", "31", "Corretiva", "Ano Novo", "1", "31", "Domingo"] },
+            { name: "DOUGLAS LUIS FREIRE", role: "Automação", shift: 2, schedule: ["Folga", "Domingo", "2h. Treinamento / 59", "59", "Corretiva", "Natal", "59", "Folga", "Domingo", "Banco", "Banco", "Banco", "Ano Novo", "Folga", "Folga", "Domingo"] },
+            { name: "NILSON CARLOS MENDES", role: "Automação", shift: 2, schedule: ["62", "Domingo", "2h. Treinamento / 62", "62", "Corretiva", "Natal", "62", "62", "Domingo", "62", "62", "Corretiva", "Ano Novo", "", "Folga", "Folga"] },
+            { name: "ALAN LUIZ MARQUES ORTIZ", role: "Elétrica", shift: 2, schedule: ["Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias"] },
+            { name: "MATHEUS VINICIUS LAPLACA CONTI", role: "Elétrica", shift: 2, schedule: ["27", "Domingo", "2h. Treinamento / Corretiva / 21", "Corretiva / 21", "Corretiva", "Natal", "Corretiva / 21", "60", "Domingo", "Corretiva / 60", "Banco", "Banco", "Ano Novo", "1", "21", "Domingo"] },
+            { name: "RICARDO DE ALMEIDA DEMICO", role: "Elétrica", shift: 2, schedule: ["", "Domingo", "2h. Treinamento / 21", "21", "Corretiva", "Natal", "Banco", "Banco", "Domingo", "60", "Corretiva", "Corretiva", "Ano Novo", "1", "21", "Domingo"] },
+            { name: "HERCULES JOSE DOS SANTOS", role: "Mecânica", shift: 2, schedule: ["Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias"] },
+            { name: "JORGE AUGUSTO RINALDI", role: "Mecânica", shift: 2, schedule: ["27", "Domingo", "2h. Treinamento / 33", "33", "Corretiva", "Natal", "Banco", "Banco", "Domingo", "20", "20", "Corretiva", "Ano Novo", "31", "31", "Domingo"] },
+            { name: "FÁBIO TRINDADE", role: "Mecânica", shift: 2, schedule: ["Banco", "Domingo", "2h. Treinamento / 22", "9", "Corretiva", "Natal", "19", "19", "Domingo", "20", "Banco", "Banco", "Ano Novo", "31", "31", "Domingo"] },
+            { name: "FABIO EUGENIO ROMERO", role: "Automação", shift: 3, schedule: ["Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Férias", "Corretiva", "Férias", "Férias", "Férias", "Férias"] },
+            { name: "MARCIO RODRIGUES DA SILVA", role: "Elétrica", shift: 3, schedule: ["Folga", "34 / 35 / 36 / 37", "2h. Treinamento / 38 / 58", "39 / 40 / 41", "Folga", "Natal", "42 / 43 / 44 / 45", "Folga", "46 / 47 / 48 / 49", "50 / 51 / 52 / 53", "54 / 55 / 56 / 57", "Folga", "Ano Novo", "1", "Folga", "Start"] },
+            { name: "SERGIO APARECIDO DA SILVA COSTA", role: "Elétrica", shift: 3, schedule: ["Folga", "34 / 35 / 36 / 37", "2h. Treinamento / 38 / 58", "39 / 40 / 41", "Folga", "Natal", "42 / 43 / 44 / 45", "Folga", "46 / 47 / 48 / 49", "50 / 51 / 52 / 53", "54 / 55 / 56 / 57", "Folga", "Ano Novo", "1", "Folga", "Start"] },
+            { name: "GABRIEL FEITOSA ALANO", role: "Mecânica", shift: 3, schedule: ["Folga", "1", "2h. Treinamento / 1", "10", "Folga", "Natal", "11", "Folga", "13", "13", "13", "Folga", "Ano Novo", "32", "Folga","Start"] },
+            { name: "LUCIANO JOSE PINELI", role: "Mecânica", shift: 3, schedule: ["Folga", "1", "2h. Treinamento / 1", "23", "Folga", "Natal", "11", "Folga", "13", "13", "13", "Folga", "Ano Novo", "32", "Folga","Start"] },
+        ];
+
+        // --- IMPACT ANALYSIS DATA (Refined Logic) ---
+        // Type: 'partial' = Impacto Parcial (Continuidade em outros dias)
+        // Type: 'total' = Não Executado (Cancelado no dia, sem continuidade)
+        const IMPACTS = [
+            { who: "ANDERSON LUIZ SALA", date: "22/12", taskId: 26, taskName: "452099-Célula de colagem de painel L5", severity: "Crítico", type: "partial" },
+            { who: "ANDERSON LUIZ SALA", date: "23/12", taskId: 26, taskName: "452099-Célula de colagem de painel L5", severity: "Crítico", type: "partial" },
+            { who: "ANDERSON LUIZ SALA", date: "20/12", taskId: 27, taskName: "Esteira de roletes teste de estanqueidade L4", severity: "Crítico", type: "partial" },
+            { who: "ANDERSON LUIZ SALA", date: "27/12", taskId: 18, taskName: "Teste funcional (2 piores) L4", severity: "Melhoria", type: "partial" },
+            { who: "ANDERSON LUIZ SALA", date: "31/12", taskId: 18, taskName: "Teste funcional (2 piores) L4", severity: "Melhoria", type: "partial" },
+            
+            { who: "LEONARDO GOMES", date: "26/12", taskId: 11, taskName: "EMBALADORA MÁQUINAPACK L3", severity: "Crítico", type: "total" },
+
+            { who: "SIDINEI DONIZETI MULLER", date: "26/12", taskId: 32, taskName: "451771-Systec velha", severity: "Normal", type: "total" },
+            
+            { who: "RICARDO DE ALMEIDA DEMICO", date: "26/12", taskId: 25, taskName: "Time 1 - L4", severity: "Segurança", type: "partial" },
+            { who: "RICARDO DE ALMEIDA DEMICO", date: "27/12", taskId: 25, taskName: "Time 1 - L4", severity: "Segurança", type: "partial" },
+            
+            { who: "DOUGLAS LUIS FREIRE", date: "30/12", taskId: 25, taskName: "Time 1 - L4", severity: "Segurança", type: "partial" },
+            
+            { who: "FÁBIO TRINDADE", date: "20/12", taskId: 33, taskName: "510963/2 - ESTEIRA LIGAÇÃO L6", severity: "Backlog", type: "total" },
+            { who: "FÁBIO TRINDADE", date: "30/12", taskId: 20, taskName: "510313/5-Esteira de talisca 2 L4", severity: "Normal", type: "partial" },
+            { who: "FÁBIO TRINDADE", date: "31/12", taskId: 20, taskName: "510313/5-Esteira de talisca 2 L4", severity: "Normal", type: "partial" },
+            
+            { who: "MATHEUS VINICIUS LAPLACA CONTI", date: "30/12", taskId: 25, taskName: "Time 1 - L4", severity: "Segurança", type: "partial" },
+            { who: "MATHEUS VINICIUS LAPLACA CONTI", date: "31/12", taskId: 25, taskName: "Time 1 - L4", severity: "Segurança", type: "partial" },
+            
+            { who: "FERNANDO SEBASTIAO DE OLIVEIRA", date: "20/12", taskId: 24, taskName: "510313-Esteira de montagem mesa L4", severity: "Normal", type: "total" },
+            
+            { who: "JORGE AUGUSTO RINALDI", date: "26/12", taskId: 19, taskName: "Esteira talisca pós transf. L4", severity: "Normal", type: "total" },
+            { who: "JORGE AUGUSTO RINALDI", date: "27/12", taskId: 19, taskName: "Esteira talisca pós transf. L4", severity: "Normal", type: "total" },
+
+            // HERCULES (FÉRIAS - ALL TOTAL)
+            { who: "HERCULES JOSE DOS SANTOS", date: "20/12", taskId: 27, taskName: "Esteira de roletes teste de estanqueidade L4", severity: "Crítico", type: "total" },
+            { who: "HERCULES JOSE DOS SANTOS", date: "22/12", taskId: 7, taskName: "510169.58-Elevador de topo L3", severity: "Crítico", type: "total" },
+            { who: "HERCULES JOSE DOS SANTOS", date: "23/12", taskId: 8, taskName: "510891 - CÉLULA ROBÓTICA L3", severity: "Normal", type: "total" },
+            { who: "HERCULES JOSE DOS SANTOS", date: "25/12", taskId: 12, taskName: "451878-Parafusamento do pézinho L3", severity: "Crítico", type: "total" },
+            { who: "HERCULES JOSE DOS SANTOS", date: "26/12", taskId: 29, taskName: "451771-IFA", severity: "Normal", type: "total" },
+            { who: "HERCULES JOSE DOS SANTOS", date: "28/12", taskId: 29, taskName: "451771-IFA", severity: "Normal", type: "total" },
+            { who: "HERCULES JOSE DOS SANTOS", date: "29/12", taskId: 29, taskName: "451771-IFA", severity: "Normal", type: "total" }
+        ];
+
+        const COLORS = {
+            Preventive: "bg-emerald-500 text-white border-emerald-600 shadow-sm",
+            Corrective: "bg-orange-500 text-white border-orange-600 shadow-sm",
+            Training: "bg-blue-500 text-white border-blue-600 shadow-sm",
+            Off: "bg-slate-200 text-slate-500 border-slate-300",
+            Vacation: "bg-purple-100 text-purple-800 border-purple-200",
+            Default: "bg-gray-100 text-gray-700",
+            Bank: "bg-red-100 text-red-800 border-red-200 font-bold", 
+        };
+
+        // --- STATE ---
+        let currentFilterRole = "Todos";
+        let currentFilterShift = "Todos";
+        let selectedDate = null;
+        let highlightedActivity = null;
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            initFilters();
+            renderGrid();
+            renderCatalog();
+        });
+
+        function initFilters() {
+            document.getElementById('filterShift').addEventListener('change', (e) => {
+                currentFilterShift = e.target.value;
+                renderGrid();
+            });
+            document.getElementById('filterRole').addEventListener('change', (e) => {
+                currentFilterRole = e.target.value;
+                renderGrid();
+            });
+        }
+
+        // --- PARSING LOGIC ---
+        function parseCell(content) {
+            if (!content) return { type: 'empty', label: '' };
+            if (content.includes("Férias")) return { type: 'vacation', label: 'Férias' };
+            if (content.includes("Banco")) return { type: 'bank', label: 'Banco' }; 
+            if (content.includes("Domingo") || content.includes("Natal") || content.includes("Ano Novo") || content.includes("Folga")) return { type: 'off', label: content };
+
+            const hasTraining = content.toLowerCase().includes("treinamento");
+            const hasCorrective = content.toLowerCase().includes("corretiva");
+
+            const parts = content.split("/").map(p => p.trim());
+            const validTasks = [];
+
+            parts.forEach(p => {
+                // If the part is purely a number or just has small noise, it's an ID
+                // We exclude the known keywords to avoid parsing "2h" as ID 2
+                if (!p.toLowerCase().includes("treinamento") && !p.toLowerCase().includes("corretiva")) {
+                    const potentialId = parseInt(p.replace(/\D/g, ''));
+                    // Ensure it is a valid ID range and not "2h" (small number with h)
+                    // Simple heuristic: if it has 'h' and number < 24 it might be hours, but user has IDs like 1, 2...
+                    // The input format "2h. Treinamento" is handled by the keyword check above.
+                    // "34" is an ID. "2h" is usually next to Treinamento.
+                    if (!isNaN(potentialId) && potentialId > 0 && potentialId < 100 && !p.toLowerCase().includes("h.")) {
+                        validTasks.push(potentialId);
+                    }
+                }
+            });
+
+            // Return a "preventive" type even for training/corrective to allow mixed rendering in the grid
+            // We will use the flags to inject the specific blocks in renderGrid
+            return { type: 'preventive', ids: validTasks, hasTraining, hasCorrective };
+        }
+
+        function getTaskDetails(ids) {
+            return ids.map(id => ACTIVITIES.find(a => a.id === parseInt(id))).filter(Boolean);
+        }
+
+        // --- IMPACT MODAL LOGIC ---
+        function openImpactModal() {
+            const modal = document.getElementById('impactModal');
+            const list = document.getElementById('impactList');
+            modal.classList.remove('hidden');
+            document.body.classList.add('modal-open');
+
+            let html = '';
+            if(IMPACTS.length === 0) {
+                html = '<div class="text-center text-slate-500 py-8">Nenhum impacto registrado.</div>';
+            } else {
+                IMPACTS.forEach(imp => {
+                    let severityColor = "bg-gray-100 text-gray-700";
+                    if(imp.severity === "Crítico") severityColor = "bg-red-100 text-red-800 border border-red-200";
+                    if(imp.severity === "Segurança") severityColor = "bg-orange-100 text-orange-800 border border-orange-200";
+                    if(imp.severity === "Melhoria") severityColor = "bg-emerald-100 text-emerald-800";
+                    
+                    // Logic for Status Display
+                    let statusHtml = '';
+                    let borderClass = '';
+                    
+                    if(imp.type === 'partial') {
+                        borderClass = 'border-l-4 border-l-yellow-400';
+                        statusHtml = `<div class="text-xs text-yellow-600 font-medium mt-1 flex items-center gap-1">
+                                        <i data-lucide="alert-circle" class="w-3 h-3"></i> Impacto Parcial (Executa em outros dias)
+                                      </div>`;
+                    } else {
+                        borderClass = 'border-l-4 border-l-red-500';
+                        statusHtml = `<div class="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
+                                        <i data-lucide="x-circle" class="w-3 h-3"></i> Não será executado (Baixa MO)
+                                      </div>`;
+                    }
+
+                    html += `
+                    <div class="bg-white p-3 rounded-lg border border-slate-200 mb-3 shadow-sm hover:shadow-md transition-shadow ${borderClass}">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">${imp.date}</span>
+                                <h3 class="font-bold text-slate-800 text-sm mt-1">${imp.who}</h3>
+                            </div>
+                            <span class="px-2 py-1 rounded text-xs font-bold ${severityColor}">${imp.severity}</span>
+                        </div>
+                        <div class="mt-2 pt-2 border-t border-slate-100">
+                            <div class="flex items-center gap-2">
+                                <span class="bg-slate-100 text-slate-600 px-1.5 rounded text-xs font-mono font-bold">ID #${imp.taskId}</span>
+                                <span class="text-sm text-slate-600 line-through">${imp.taskName}</span>
+                            </div>
+                            ${statusHtml}
+                        </div>
+                    </div>`;
+                });
+            }
+            list.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        function closeImpactModal() {
+            document.getElementById('impactModal').classList.add('hidden');
+            document.body.classList.remove('modal-open');
+        }
+
+        // --- RENDERING ---
+
+        function renderGrid() {
+            // Render Headers
+            const headerRow = document.getElementById('headerRow');
+            let headerHTML = `<th class="sticky left-0 z-20 bg-slate-100 p-3 text-left border-b border-r border-slate-200 w-64 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                <div class="flex items-center gap-2 text-slate-700 text-sm font-bold">Colaborador</div>
+            </th>`;
+            
+            SCHEDULE_DATES.forEach(date => {
+                const isSelected = selectedDate === date;
+                const classes = isSelected 
+                    ? 'bg-indigo-600 text-white shadow-inner scale-105' 
+                    : 'text-slate-600 hover:bg-indigo-100 hover:text-indigo-700';
+                
+                headerHTML += `<th onclick="selectDate('${date}')" 
+                    class="p-2 min-w-[70px] text-center border-b border-slate-200 text-sm font-bold transition-all cursor-pointer select-none ${classes}">
+                    ${date}
+                </th>`;
+            });
+            headerRow.innerHTML = headerHTML;
+
+            // Render Body
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = '';
+
+            const filteredTeam = TEAM_DATA.filter(member => {
+                const roleMatch = currentFilterRole === "Todos" || member.role === currentFilterRole;
+                const shiftMatch = currentFilterShift === "Todos" || member.shift.toString() === currentFilterShift;
+                return roleMatch && shiftMatch;
+            });
+
+            filteredTeam.forEach(member => {
+                const row = document.createElement('tr');
+                row.className = "hover:bg-slate-50 transition-colors group";
+                
+                // Name Cell
+                let roleColorClass = '';
+                if(member.role === 'Mecânica') roleColorClass = 'bg-orange-50 text-orange-700 border-orange-100';
+                else if(member.role === 'Elétrica') roleColorClass = 'bg-yellow-50 text-yellow-700 border-yellow-100';
+                else roleColorClass = 'bg-cyan-50 text-cyan-700 border-cyan-100';
+
+                let rowHTML = `<td class="sticky left-0 z-10 bg-white group-hover:bg-slate-50 p-3 border-b border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                    <div class="font-semibold text-slate-700 text-sm md:text-base">${member.name}</div>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider font-bold border ${roleColorClass}">${member.role}</span>
+                        <span class="text-[10px] text-slate-400 font-mono">T${member.shift}</span>
+                    </div>
+                </td>`;
+
+                // Schedule Cells
+                member.schedule.forEach((dayContent, dIdx) => {
+                    const parsed = parseCell(dayContent);
+                    const isSelectedDate = SCHEDULE_DATES[dIdx] === selectedDate;
+                    const bgClass = isSelectedDate ? 'bg-indigo-50/50' : '';
+                    
+                    let cellContent = '';
+                    
+                    if (parsed.type === 'empty') {
+                        cellContent = `<div class="w-full h-full"></div>`;
+                    } else if (parsed.type === 'bank') { // Handle Bank
+                        const opacityClass = highlightedActivity ? 'opacity-30 grayscale' : '';
+                        cellContent = `<div class="w-full h-full rounded flex items-center justify-center text-xs select-none ${COLORS.Bank} ${opacityClass}">${parsed.label}</div>`;
+                    } else if (parsed.type === 'off' || parsed.type === 'vacation') {
+                        const opacityClass = highlightedActivity ? 'opacity-30 grayscale' : '';
+                        cellContent = `<div class="w-full h-full rounded flex items-center justify-center text-xs font-semibold select-none ${COLORS.Off} ${opacityClass}">${parsed.label}</div>`;
+                    } else if (parsed.type === 'preventive') {
+                        // Mixed content handling: IDs + potentially training/corrective blocks
+                        let innerHTML = '';
+                        
+                        // 1. Render IDs
+                        parsed.ids.forEach(id => {
+                            const isGlobalHighlightActive = highlightedActivity !== null;
+                            const isHighlighted = highlightedActivity === id;
+                            let cellClass = "";
+                            
+                            if (isGlobalHighlightActive) {
+                                if (isHighlighted) {
+                                    cellClass = "bg-yellow-400 text-yellow-900 ring-4 ring-yellow-200 z-10 scale-110 border-yellow-500 font-extrabold shadow-lg"; 
+                                } else {
+                                    cellClass = "bg-slate-100 text-slate-300 border-slate-200 opacity-20 grayscale";
+                                }
+                            } else {
+                                cellClass = COLORS.Preventive + " hover:ring-2 hover:ring-offset-1 hover:ring-emerald-400";
+                            }
+
+                            innerHTML += `<div onmouseenter="showTooltip(event, ${id})" onmouseleave="hideTooltip()"
+                                class="w-full flex items-center justify-center py-1 rounded text-xs font-extrabold cursor-help shadow-sm transition-all relative mb-1 ${cellClass}">
+                                ${id}
+                            </div>`;
+                        });
+                        
+                        // 2. Render Corrective Blocks (if any mixed in)
+                        if (parsed.hasCorrective) {
+                             const opacityClass = highlightedActivity ? 'opacity-20 grayscale' : '';
+                             innerHTML += `<div class="w-full flex items-center justify-center py-1 rounded text-[10px] font-bold shadow-sm transition-all relative mb-1 bg-orange-500 text-white ${opacityClass}">Corr</div>`;
+                        }
+
+                        // 3. Render Training Blocks (if any mixed in)
+                        if (parsed.hasTraining) {
+                             const opacityClass = highlightedActivity ? 'opacity-20 grayscale' : '';
+                             innerHTML += `<div class="w-full flex items-center justify-center py-1 rounded text-[10px] font-bold shadow-sm transition-all relative mb-1 bg-blue-500 text-white ${opacityClass}">Treino</div>`;
+                        }
+
+                        cellContent = `<div class="flex flex-col gap-0.5 h-full overflow-y-auto custom-scrollbar p-0.5">${innerHTML}</div>`;
+                        
+                    } else if (parsed.type === 'corrective') {
+                        // Explicit full cell corrective turned into block style inside cell
+                        const opacityClass = highlightedActivity ? 'opacity-20 grayscale' : '';
+                        cellContent = `<div class="flex flex-col h-full justify-center p-0.5"><div class="w-full py-1 rounded text-center text-[10px] font-bold shadow-sm bg-orange-500 text-white ${opacityClass}">Corr</div></div>`;
+                    } else if (parsed.type === 'training') {
+                        // Explicit full cell training turned into block style
+                        const opacityClass = highlightedActivity ? 'opacity-20 grayscale' : '';
+                        cellContent = `<div class="flex flex-col h-full justify-center p-0.5"><div class="w-full py-1 rounded text-center text-[10px] font-bold shadow-sm bg-blue-500 text-white ${opacityClass}">Treino</div></div>`;
+                    } else {
+                        const opacityClass = highlightedActivity ? 'opacity-20' : '';
+                        cellContent = `<div class="w-full h-full rounded flex items-center justify-center text-xs text-center p-1 leading-tight font-medium bg-slate-100 text-slate-500 ${opacityClass}">${dayContent}</div>`;
+                    }
+
+                    rowHTML += `<td class="p-1 border-b border-slate-100 relative h-16 align-top ${bgClass}">${cellContent}</td>`;
+                });
+
+                row.innerHTML = rowHTML;
+                tableBody.appendChild(row);
+            });
+        }
+
+        function selectDate(date) {
+            if (selectedDate === date) {
+                selectedDate = null;
+            } else {
+                selectedDate = date;
+            }
+            renderGrid();
+            renderSummary();
+        }
+
+        function renderSummary() {
+            const container = document.getElementById('summaryContainer');
+            
+            if (!selectedDate) {
+                container.innerHTML = `
+                    <div class="p-6 text-center text-slate-400 bg-slate-50 h-full flex flex-col items-center justify-center min-h-[250px]">
+                        <div class="bg-white p-4 rounded-full shadow-sm mb-4">
+                            <i data-lucide="calendar" class="w-8 h-8 text-indigo-300"></i>
+                        </div>
+                        <h3 class="text-slate-600 font-bold mb-2">Painel de Resumo</h3>
+                        <p class="text-sm">Clique em uma data no cabeçalho (ex: 24/12) para ver estatísticas.</p>
+                    </div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            // Calculate Stats
+            const dateIndex = SCHEDULE_DATES.indexOf(selectedDate);
+            const stats = { preventive: 0, corrective: 0, tasks: [] };
+            
+            const filteredTeam = TEAM_DATA.filter(member => {
+                const roleMatch = currentFilterRole === "Todos" || member.role === currentFilterRole;
+                const shiftMatch = currentFilterShift === "Todos" || member.shift.toString() === currentFilterShift;
+                return roleMatch && shiftMatch;
+            });
+
+            filteredTeam.forEach(member => {
+                const cell = member.schedule[dateIndex];
+                const parsed = parseCell(cell);
+                if (parsed.type === 'preventive') {
+                    stats.preventive++;
+                    parsed.ids.forEach(id => {
+                        const t = ACTIVITIES.find(a => a.id === id);
+                        if (t && !stats.tasks.find(x => x.id === t.id)) stats.tasks.push(t);
+                    });
+                } else if (parsed.type === 'corrective' || parsed.hasCorrective) {
+                    stats.corrective++;
+                }
+            });
+
+            stats.tasks.sort((a, b) => a.id - b.id);
+
+            let tasksHTML = '';
+            if (stats.tasks.length > 0) {
+                stats.tasks.forEach(task => {
+                    const isHigh = highlightedActivity === task.id;
+                    const borderClass = isHigh ? 'border-yellow-400 bg-yellow-50' : 'border-slate-100 bg-slate-50';
+                    const tagClass = task.class === 'Crítico' ? 'bg-red-100 text-red-600' : 'bg-gray-200';
+                    
+                    tasksHTML += `
+                    <li onclick="toggleHighlight(${task.id})" class="text-xs p-2 rounded border hover:bg-yellow-50 cursor-pointer transition-colors mb-2 ${borderClass}">
+                        <div class="flex justify-between">
+                            <strong class="text-slate-700">ID ${task.id}</strong>
+                            <span class="text-[9px] px-1 rounded ${tagClass}">${task.class}</span>
+                        </div>
+                        <div class="text-slate-500 mt-1">${task.asset}</div>
+                    </li>`;
+                });
+            } else {
+                tasksHTML = '<p class="text-xs text-slate-400 italic">Nenhuma preventiva (ID) programada.</p>';
+            }
+
+            container.innerHTML = `
+                <div class="p-4 bg-indigo-600 text-white sticky top-0 z-10">
+                    <div class="flex justify-between items-center mb-1">
+                        <h2 class="font-bold text-lg flex items-center gap-2">
+                            <i data-lucide="calendar-days" class="w-5 h-5"></i>
+                            ${selectedDate}
+                        </h2>
+                        <button onclick="selectDate('${selectedDate}')" class="hover:bg-indigo-500 p-1 rounded">
+                            <i data-lucide="x" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <p class="text-indigo-100 text-xs">Resumo do Dia</p>
+                </div>
+                <div class="p-4 space-y-6">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+                            <div class="text-emerald-800 text-xs font-bold uppercase">Preventiva</div>
+                            <div class="text-2xl font-bold text-emerald-600">${stats.preventive}</div>
+                        </div>
+                        <div class="bg-orange-50 p-3 rounded-lg border border-orange-100">
+                            <div class="text-orange-800 text-xs font-bold uppercase">Corretiva</div>
+                            <div class="text-2xl font-bold text-orange-600">${stats.corrective}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2 border-b pb-1">
+                            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i>
+                            IDs em Atuação (Ord.)
+                        </h3>
+                        <ul class="space-y-0">
+                            ${tasksHTML}
+                        </ul>
+                    </div>
+                </div>`;
+            
+            lucide.createIcons();
+        }
+
+        function renderCatalog() {
+            // Collect all scheduled IDs
+            const scheduledIds = new Set();
+            TEAM_DATA.forEach(member => {
+                member.schedule.forEach(cell => {
+                    const parsed = parseCell(cell);
+                    if (parsed.type === 'preventive' && parsed.ids) {
+                        parsed.ids.forEach(id => scheduledIds.add(id));
+                    }
+                });
+            });
+
+            const list = document.getElementById('catalogList');
+            let html = '';
+            
+            ACTIVITIES.forEach(a => {
+                const isHigh = highlightedActivity === a.id;
+                const isScheduled = scheduledIds.has(a.id);
+                
+                // Determine container class
+                let containerClass = 'cursor-pointer transition-all border ';
+                
+                if (isHigh) {
+                    containerClass += 'bg-yellow-100 border-yellow-400 shadow-md transform scale-105 ';
+                } else if (!isScheduled) {
+                    containerClass += 'bg-red-50 border-red-300 border-dashed hover:bg-red-100 ';
+                } else {
+                    containerClass += 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm ';
+                }
+
+                // Determine badge class
+                let badgeClass = '';
+                if (isHigh) {
+                    badgeClass = 'bg-yellow-400 text-yellow-900';
+                } else if (!isScheduled) {
+                    badgeClass = 'bg-red-200 text-red-800';
+                } else {
+                    badgeClass = 'bg-emerald-50 text-emerald-700';
+                }
+
+                const tagClass = a.class === 'Crítico' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500';
+
+                html += `
+                <div onclick="toggleHighlight(${a.id})" 
+                    class="flex gap-2 text-[10px] p-2 rounded ${containerClass}">
+                    <div class="flex flex-col items-center justify-center min-w-[30px] rounded p-1 ${badgeClass}">
+                        <span class="font-bold text-xs">#${a.id}</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex justify-between items-center mb-0.5">
+                            <span class="font-bold text-slate-700 truncate" title="${a.asset}">${a.asset}</span>
+                            ${!isScheduled ? '<span class="text-[9px] font-bold text-red-600 bg-red-100 px-1 rounded ml-1 whitespace-nowrap">Não Programado</span>' : ''}
+                        </div>
+                        <div class="text-slate-500 truncate" title="${a.task}">${a.task}</div>
+                        <div class="flex gap-2 mt-1">
+                            <span class="px-1 rounded text-[9px] ${tagClass}">${a.class}</span>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            list.innerHTML = html;
+        }
+
+        function toggleHighlight(id) {
+            if (highlightedActivity === id) {
+                highlightedActivity = null;
+            } else {
+                highlightedActivity = id;
+            }
+            updateHighlightUI();
+            renderGrid();
+            renderCatalog();
+            if(selectedDate) renderSummary(); // Update sidebar styling too
+        }
+
+        function clearHighlight() {
+            highlightedActivity = null;
+            updateHighlightUI();
+            renderGrid();
+            renderCatalog();
+            if(selectedDate) renderSummary();
+        }
+
+        function updateHighlightUI() {
+            const indicator = document.getElementById('highlightIndicator');
+            const clearBtn = document.getElementById('clearHighlightBtn');
+            const text = document.getElementById('highlightText');
+            
+            if (highlightedActivity) {
+                indicator.classList.remove('hidden');
+                clearBtn.classList.remove('hidden');
+                text.textContent = `Destacando ID #${highlightedActivity}`;
+            } else {
+                indicator.classList.add('hidden');
+                clearBtn.classList.add('hidden');
+            }
+        }
+
+        // --- TOOLTIP LOGIC ---
+        const tooltip = document.getElementById('globalTooltip');
+        
+        function showTooltip(e, id) {
+            const task = ACTIVITIES.find(a => a.id === id);
+            if(!task) return;
+
+            document.getElementById('ttId').textContent = `ID #${task.id}`;
+            const classEl = document.getElementById('ttClass');
+            classEl.textContent = task.class;
+            classEl.className = `text-[9px] px-1.5 rounded uppercase font-bold ${task.class === 'Crítico' ? 'bg-red-500' : 'bg-slate-600'}`;
+
+            document.getElementById('ttAsset').textContent = task.asset;
+            document.getElementById('ttTask').textContent = task.task;
+            document.getElementById('ttOm').textContent = task.om || 'N/A'; // New OM Field
+            document.getElementById('ttMec').textContent = task.mec;
+            document.getElementById('ttEle').textContent = task.ele;
+            document.getElementById('ttAut').textContent = task.aut;
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            tooltip.style.left = (rect.left + rect.width / 2) + 'px';
+            tooltip.style.top = rect.top + 'px';
+            tooltip.classList.remove('hidden');
+        }
+
+        function hideTooltip() {
+            tooltip.classList.add('hidden');
+        }
+
+    </script>
+</body>
+</html>
